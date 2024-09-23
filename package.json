@@ -1,6 +1,6 @@
 {
   "name": "react-native-audio-effects",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "An audio effects module created for music production apps",
   "main": "lib/src/index.js",
   "types": "lib/src/index.d.ts",
@@ -39,5 +39,21 @@
   "engines": {
     "node": ">=18"
   },
+  "keywords": [
+    "react",
+    "react-native",
+    "audio-effects",
+    "audio-player",
+    "audio",
+    "effects",
+    "music",
+    "controls",
+    "music-production",
+    "android",
+    "ios",
+    "windows",
+    "hooks"
+  ],
+  "license": "Apache-2.0",
   "packageManager": "yarn@3.6.4"
 }

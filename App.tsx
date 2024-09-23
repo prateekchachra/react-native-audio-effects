@@ -1,17 +1,10 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
 
-import React from 'react';
-import type {PropsWithChildren} from 'react';
+
+import React, { useState } from 'react';
 import {
+  Button,
   SafeAreaView,
-  ScrollView,
   StatusBar,
-  StyleSheet,
   Text,
   useColorScheme,
   View,
@@ -19,100 +12,112 @@ import {
 
 import {
   Colors,
-  DebugInstructions,
-  Header,
-  LearnMoreLinks,
-  ReloadInstructions,
 } from 'react-native/Libraries/NewAppScreen';
+import Slider from '@react-native-community/slider';
+import { playBrownNoise, playPinkNoise, playWhiteNoise, stopBrownNoise, stopPinkNoise, stopWhiteNoise } from './src/audioEffects';
 
-type SectionProps = PropsWithChildren<{
-  title: string;
-}>;
 
-function Section({children, title}: SectionProps): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
-  return (
-    <View style={styles.sectionContainer}>
-      <Text
-        style={[
-          styles.sectionTitle,
-          {
-            color: isDarkMode ? Colors.white : Colors.black,
-          },
-        ]}>
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.sectionDescription,
-          {
-            color: isDarkMode ? Colors.light : Colors.dark,
-          },
-        ]}>
-        {children}
-      </Text>
-    </View>
-  );
-}
 
 function App(): React.JSX.Element {
   const isDarkMode = useColorScheme() === 'dark';
+  const [whiteNoiseLevel, setWhiteNoiseLevel] = useState(0);
+  const [brownNoiseLevel, setBrownNoiseLevel] = useState(0);
+  const [pinkNoiseLevel, setPinkNoiseLevel] = useState(0);
 
   const backgroundStyle = {
     backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
+    flex: 1
   };
+  const handleSliderChange = (value: number, type: string) => {
+    if(type === 'white'){
+      stopBrownNoise();
+      stopPinkNoise();
+      playWhiteNoise(value);
 
+      setPinkNoiseLevel(0);
+      setBrownNoiseLevel(0);
+      setWhiteNoiseLevel(value);
+    }
+    else if (type === 'brown') {
+      stopPinkNoise();
+      stopWhiteNoise();
+      playBrownNoise(value);
+
+      setPinkNoiseLevel(0);
+      setWhiteNoiseLevel(0);
+      setBrownNoiseLevel(value);
+    }
+    else if (type === 'pink') {
+      stopBrownNoise();
+      stopWhiteNoise();
+      playPinkNoise(value);
+
+      setPinkNoiseLevel(value);
+      setWhiteNoiseLevel(0);
+      setBrownNoiseLevel(0);
+    }
+  }
+
+  const handleStopPress = () => {
+    stopBrownNoise();
+    stopPinkNoise();
+    stopWhiteNoise();
+
+    setPinkNoiseLevel(0);
+    setWhiteNoiseLevel(0);
+    setBrownNoiseLevel(0);
+  }
   return (
     <SafeAreaView style={backgroundStyle}>
-      <StatusBar
-        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-        backgroundColor={backgroundStyle.backgroundColor}
-      />
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        style={backgroundStyle}>
-        <Header />
-        <View
-          style={{
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
-          }}>
-          <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.tsx</Text> to change this
-            screen and then come back to see your edits.
-          </Section>
-          <Section title="See Your Changes">
-            <ReloadInstructions />
-          </Section>
-          <Section title="Debug">
-            <DebugInstructions />
-          </Section>
-          <Section title="Learn More">
-            Read the docs to discover what to do next:
-          </Section>
-          <LearnMoreLinks />
-        </View>
-      </ScrollView>
+      <StatusBar />
+      <View style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
+      <View style={{height: '100%', justifyContent: 'center', }}>
+      <Text style={{fontSize: 24, marginVertical: 12, fontWeight: '700'}}>Noise Generators</Text>
+        <View style={{flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'}}>
+        <Text style={{padding: 12}}>Brown Noise</Text>
+          <Slider      
+            value={brownNoiseLevel}
+            style={{width: 200, height: 40,}}
+            tapToSeek
+            minimumValue={0}
+            maximumValue={1}
+            minimumTrackTintColor="#000"
+            maximumTrackTintColor="#fff"
+            onValueChange={(value) => handleSliderChange(value, 'brown')}
+          />
+          </View>
+        <View style={{flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'}}>
+        <Text  style={{padding: 12}}>Pink Noise</Text>
+          <Slider      
+            value={pinkNoiseLevel}
+            style={{width: 200, height: 40 }}
+            tapToSeek
+            minimumValue={0}
+            maximumValue={1}
+            minimumTrackTintColor="#000"
+            maximumTrackTintColor="#fff"
+            onValueChange={(value) => handleSliderChange(value, 'pink')}
+          />
+          </View>
+        <View style={{flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'}}>
+        <Text  style={{padding: 12}}>White Noise</Text>
+          <Slider     
+            value={whiteNoiseLevel} 
+            style={{width: 200, height: 40 }}
+            tapToSeek
+            minimumValue={0}
+            maximumValue={1}
+            minimumTrackTintColor="#000"
+            maximumTrackTintColor="#fff"
+            onValueChange={(value) => handleSliderChange(value, 'white')}
+          />
+          </View>
+    
+          <Button title='Stop'  color="#841584" onPress={handleStopPress}/>
+          </View>
+    </View>
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
-  },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-  },
-  sectionDescription: {
-    marginTop: 8,
-    fontSize: 18,
-    fontWeight: '400',
-  },
-  highlight: {
-    fontWeight: '700',
-  },
-});
 
 export default App;

@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 54;
+	objectVersion = 56;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -14,6 +14,11 @@
 		13B07FC11A68108700A75B9A /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 13B07FB71A68108700A75B9A /* main.m */; };
 		7699B88040F8A987B510C191 /* libPods-AudioEffects-AudioEffectsTests.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 19F6CBCC0A4E27FBF8BF4A61 /* libPods-AudioEffects-AudioEffectsTests.a */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
+		840D9F942CA1B080007F51EE /* EventEmitter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 840D9F922CA1B080007F51EE /* EventEmitter.swift */; };
+		840D9F952CA1B080007F51EE /* EventType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 840D9F932CA1B080007F51EE /* EventType.swift */; };
+		84C5BC942CA0C77E0087E46C /* AudioEffects.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84C5BC932CA0C77A0087E46C /* AudioEffects.swift */; };
+		84C5BC992CA0CA080087E46C /* RNAudioEffectsBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = 84C5BC982CA0CA050087E46C /* RNAudioEffectsBridge.m */; };
+		84C5BC9B2CA0CD4F0087E46C /* SoundpipeAudioKit in Frameworks */ = {isa = PBXBuildFile; productRef = 84C5BC9A2CA0CD4F0087E46C /* SoundpipeAudioKit */; };
 		DD252903E090C9280E9D8DD8 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = FA7EE5A1F46B51218D3BD506 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
@@ -44,9 +49,15 @@
 		5B7EB9410499542E8C5724F5 /* Pods-AudioEffects-AudioEffectsTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-AudioEffects-AudioEffectsTests.debug.xcconfig"; path = "Target Support Files/Pods-AudioEffects-AudioEffectsTests/Pods-AudioEffects-AudioEffectsTests.debug.xcconfig"; sourceTree = "<group>"; };
 		5DCACB8F33CDC322A6C60F78 /* libPods-AudioEffects.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-AudioEffects.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = AudioEffects/LaunchScreen.storyboard; sourceTree = "<group>"; };
+		840D9F912CA1B066007F51EE /* RNAudioEffects-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "RNAudioEffects-Bridging-Header.h"; sourceTree = "<group>"; };
+		840D9F922CA1B080007F51EE /* EventEmitter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventEmitter.swift; sourceTree = "<group>"; };
+		840D9F932CA1B080007F51EE /* EventType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventType.swift; sourceTree = "<group>"; };
+		84C5BC932CA0C77A0087E46C /* AudioEffects.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioEffects.swift; sourceTree = "<group>"; };
+		84C5BC972CA0C9DD0087E46C /* RNAudioEffectsBridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RNAudioEffectsBridge.h; sourceTree = "<group>"; };
+		84C5BC982CA0CA050087E46C /* RNAudioEffectsBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RNAudioEffectsBridge.m; sourceTree = "<group>"; };
 		89C6BE57DB24E9ADA2F236DE /* Pods-AudioEffects-AudioEffectsTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-AudioEffects-AudioEffectsTests.release.xcconfig"; path = "Target Support Files/Pods-AudioEffects-AudioEffectsTests/Pods-AudioEffects-AudioEffectsTests.release.xcconfig"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
-		FA7EE5A1F46B51218D3BD506 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = AudioEffects/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		FA7EE5A1F46B51218D3BD506 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = AudioEffects/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -62,6 +73,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				84C5BC9B2CA0CD4F0087E46C /* SoundpipeAudioKit in Frameworks */,
 				0C80B921A6F3F58F76C31292 /* libPods-AudioEffects.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -89,6 +101,11 @@
 		13B07FAE1A68108700A75B9A /* AudioEffects */ = {
 			isa = PBXGroup;
 			children = (
+				8457FF072CA1596B00C945EF /* Utils */,
+				84C5BC9C2CA0CDC20087E46C /* Support */,
+				84C5BC982CA0CA050087E46C /* RNAudioEffectsBridge.m */,
+				84C5BC972CA0C9DD0087E46C /* RNAudioEffectsBridge.h */,
+				84C5BC932CA0C77A0087E46C /* AudioEffects.swift */,
 				13B07FAF1A68108700A75B9A /* AppDelegate.h */,
 				13B07FB01A68108700A75B9A /* AppDelegate.mm */,
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
@@ -140,6 +157,23 @@
 				00E356EE1AD99517003FC87E /* AudioEffectsTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		8457FF072CA1596B00C945EF /* Utils */ = {
+			isa = PBXGroup;
+			children = (
+				840D9F922CA1B080007F51EE /* EventEmitter.swift */,
+				840D9F932CA1B080007F51EE /* EventType.swift */,
+			);
+			path = Utils;
+			sourceTree = "<group>";
+		};
+		84C5BC9C2CA0CDC20087E46C /* Support */ = {
+			isa = PBXGroup;
+			children = (
+				840D9F912CA1B066007F51EE /* RNAudioEffects-Bridging-Header.h */,
+			);
+			path = Support;
 			sourceTree = "<group>";
 		};
 		BBD78D7AC51CEA395F1C20DB /* Pods */ = {
@@ -216,7 +250,7 @@
 				};
 			};
 			buildConfigurationList = 83CBB9FA1A601CBA00E9B192 /* Build configuration list for PBXProject "AudioEffects" */;
-			compatibilityVersion = "Xcode 12.0";
+			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -224,6 +258,10 @@
 				Base,
 			);
 			mainGroup = 83CBB9F61A601CBA00E9B192;
+			packageReferences = (
+				84C5BC952CA0C89B0087E46C /* XCRemoteSwiftPackageReference "SwiftAudioEx" */,
+				84C5BC962CA0C9240087E46C /* XCRemoteSwiftPackageReference "SoundpipeAudioKit" */,
+			);
 			productRefGroup = 83CBBA001A601CBA00E9B192 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -398,6 +436,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				840D9F942CA1B080007F51EE /* EventEmitter.swift in Sources */,
+				840D9F952CA1B080007F51EE /* EventType.swift in Sources */,
+				84C5BC992CA0CA080087E46C /* RNAudioEffectsBridge.m in Sources */,
+				84C5BC942CA0C77E0087E46C /* AudioEffects.swift in Sources */,
 				13B07FBC1A68108700A75B9A /* AppDelegate.mm in Sources */,
 				13B07FC11A68108700A75B9A /* main.m in Sources */,
 			);
@@ -484,7 +526,8 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "org.reactjs.native.example.$(PRODUCT_NAME:rfc1034identifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.rnlibrary.audioeffects.--PRODUCT-NAME-rfc1034identifier-";
+				"PRODUCT_BUNDLE_IDENTIFIER[sdk=iphoneos*]" = com.rnlibrary.audioeffects;
 				PRODUCT_NAME = AudioEffects;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -510,7 +553,8 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "org.reactjs.native.example.$(PRODUCT_NAME:rfc1034identifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.rnlibrary.audioeffects.--PRODUCT-NAME-rfc1034identifier-";
+				"PRODUCT_BUNDLE_IDENTIFIER[sdk=iphoneos*]" = com.rnlibrary.audioeffects;
 				PRODUCT_NAME = AudioEffects;
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";
@@ -590,10 +634,7 @@
 					"-DFOLLY_CFG_NO_COROUTINES=1",
 					"-DFOLLY_HAVE_CLOCK_GETTIME=1",
 				);
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					" ",
-				);
+				OTHER_LDFLAGS = "$(inherited)  ";
 				REACT_NATIVE_PATH = "${PODS_ROOT}/../../node_modules/react-native";
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
@@ -666,10 +707,7 @@
 					"-DFOLLY_CFG_NO_COROUTINES=1",
 					"-DFOLLY_HAVE_CLOCK_GETTIME=1",
 				);
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					" ",
-				);
+				OTHER_LDFLAGS = "$(inherited)  ";
 				REACT_NATIVE_PATH = "${PODS_ROOT}/../../node_modules/react-native";
 				SDKROOT = iphoneos;
 				USE_HERMES = true;
@@ -708,6 +746,33 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		84C5BC952CA0C89B0087E46C /* XCRemoteSwiftPackageReference "SwiftAudioEx" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/doublesymmetry/SwiftAudioEx";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.1.0;
+			};
+		};
+		84C5BC962CA0C9240087E46C /* XCRemoteSwiftPackageReference "SoundpipeAudioKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/AudioKit/SoundpipeAudioKit";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.6.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		84C5BC9A2CA0CD4F0087E46C /* SoundpipeAudioKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 84C5BC962CA0C9240087E46C /* XCRemoteSwiftPackageReference "SoundpipeAudioKit" */;
+			productName = SoundpipeAudioKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 83CBB9F71A601CBA00E9B192 /* Project object */;
 }

@@ -1,7 +1,11 @@
 {
-  "name": "AudioEffects",
-  "version": "0.0.1",
-  "private": true,
+  "name": "react-native-audio-effects",
+  "version": "1.0.0",
+  "description": "An audio effects module created for music production apps",
+  "main": "lib/src/index.js",
+  "types": "lib/src/index.d.ts",
+  "react-native": "src/index",
+  "source": "src/index",
   "scripts": {
     "android": "react-native run-android",
     "ios": "react-native run-ios",
@@ -10,8 +14,10 @@
     "test": "jest"
   },
   "dependencies": {
+    "@react-native-community/slider": "^4.5.3",
     "react": "18.3.1",
-    "react-native": "0.75.3"
+    "react-native": "0.75.3",
+    "react-native-knob": "^2.3.2"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",

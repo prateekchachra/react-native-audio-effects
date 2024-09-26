@@ -19,4 +19,10 @@ RCT_EXTERN_METHOD(stopPinkNoise);
 RCT_EXTERN_METHOD(playWhiteNoise:(float)decibels);
 RCT_EXTERN_METHOD(stopWhiteNoise);
 
+RCT_EXTERN_METHOD(playSound:(BOOL)isLoop:(NSString *)fileName:(float)decibels:);
+RCT_EXTERN_METHOD(stopSound);
+
+RCT_EXTERN_METHOD(addDelayToSound:(float)decibels);
+
+
 @end

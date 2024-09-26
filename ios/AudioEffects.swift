@@ -11,6 +11,7 @@ import Foundation
 import React
 import SoundpipeAudioKit
 import AudioKit
+import AVFoundation
 
 @objc(AudioEffects)
 public class AudioEffects: RCTEventEmitter {
@@ -20,8 +21,9 @@ public class AudioEffects: RCTEventEmitter {
   private var brownianNoise = BrownianNoise()
   private var pinkNoise = PinkNoise()
   private var whiteNoise = WhiteNoise()
-  
   private var mixer = Mixer()
+  private var conductor = DelayConductor()
+  private var isPlaying = false;
   
   public override init() {
     super.init()
@@ -90,6 +92,48 @@ public class AudioEffects: RCTEventEmitter {
   @objc(stopWhiteNoise)
   public func stopWhiteNoise() {
     whiteNoise.stop()  // Stop the noise generator
+  }
+  
+  @objc(playSound:fileName:decibels:)
+  public func playSound(isLoop: Bool, fileName: String, decibels: Float){
+    conductor.player.stop()
+    Log(fileName);
+    
+    guard let url = URL(string: fileName),
+          let buffer = try? AVAudioPCMBuffer(url: url)
+    else {
+        Log("failed to load sample", fileName)
+        return
+    }
+    conductor.player.buffer = buffer
+    conductor.player.volume = decibels
+    conductor.player.file = try? AVAudioFile(forReading: url)
+    conductor.player.isLooping = true
+    
+    if isPlaying == false {
+      
+      conductor.player.play()
+    }
+  }
+  
+  @objc(stopSound)
+  public func stopSound(){
+    conductor.player.stop()
+  }
+  
+  @objc(addDelayToSound:delayTime:feedback:lowPassCutoff:)
+  public func addDelayToSound(dryWetMix: Float, delayTime: Float, feedback: Float, lowPassCutoff: Float) {
+
+    conductor.delay.feedback = feedback;
+    conductor.delay.time = delayTime;
+    conductor.delay.lowPassCutoff = lowPassCutoff;
+    conductor.dryWetMixer.balance = dryWetMix;
+    conductor.player.play()
+  }
+  
+  @objc(stopDelayPlayer)
+  public func addDelay() {
+    conductor.player.stop()
   }
   
   override public func supportedEvents() -> [String]! {

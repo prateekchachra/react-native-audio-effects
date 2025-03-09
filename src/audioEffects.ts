@@ -1,7 +1,5 @@
 import AudioEffects from './AudioEffectsModule';
 
-
-
 export async function playSound(isLoop: boolean, fileName: string, decibels: number) {
     return AudioEffects.playSound(isLoop, fileName, decibels);
   }

@@ -1,59 +1,194 @@
 {
   "name": "react-native-audio-effects",
-  "version": "1.0.1",
-  "description": "An audio effects module created for music production apps",
-  "main": "lib/src/index.js",
-  "types": "lib/src/index.d.ts",
-  "react-native": "src/index",
-  "source": "src/index",
-  "scripts": {
-    "android": "react-native run-android",
-    "ios": "react-native run-ios",
-    "lint": "eslint .",
-    "start": "react-native start",
-    "test": "jest"
+  "version": "2.0.0",
+  "description": "Professional audio effects, generators and plugin-style UI controls for React Native",
+  "main": "./lib/module/index.js",
+  "types": "./lib/typescript/src/index.d.ts",
+  "exports": {
+    ".": {
+      "react-native-audio-effects-source": "./src/index.tsx",
+      "types": "./lib/typescript/src/index.d.ts",
+      "default": "./lib/module/index.js"
+    },
+    "./ui": {
+      "react-native-audio-effects-source": "./src/ui/index.tsx",
+      "types": "./lib/typescript/src/ui/index.d.ts",
+      "default": "./lib/module/ui/index.js"
+    },
+    "./package.json": "./package.json"
   },
-  "dependencies": {
-    "@react-native-community/slider": "^4.5.3",
-    "react": "18.3.1",
-    "react-native": "0.75.3",
-    "react-native-knob": "^2.3.2"
-  },
-  "devDependencies": {
-    "@babel/core": "^7.20.0",
-    "@babel/preset-env": "^7.20.0",
-    "@babel/runtime": "^7.20.0",
-    "@react-native/babel-preset": "0.75.3",
-    "@react-native/eslint-config": "0.75.3",
-    "@react-native/metro-config": "0.75.3",
-    "@react-native/typescript-config": "0.75.3",
-    "@types/react": "^18.2.6",
-    "@types/react-test-renderer": "^18.0.0",
-    "babel-jest": "^29.6.3",
-    "eslint": "^8.19.0",
-    "jest": "^29.6.3",
-    "prettier": "2.8.8",
-    "react-test-renderer": "18.3.1",
-    "typescript": "5.0.4"
-  },
-  "engines": {
-    "node": ">=18"
-  },
-  "keywords": [
-    "react",
-    "react-native",
-    "audio-effects",
-    "audio-player",
-    "audio",
-    "effects",
-    "music",
-    "controls",
-    "music-production",
+  "files": [
+    "src",
+    "lib",
     "android",
     "ios",
-    "windows",
-    "hooks"
+    "cpp",
+    "*.podspec",
+    "react-native.config.js",
+    "!ios/build",
+    "!android/build",
+    "!android/gradle",
+    "!android/gradlew",
+    "!android/gradlew.bat",
+    "!android/local.properties",
+    "!**/__tests__",
+    "!**/__fixtures__",
+    "!**/__mocks__",
+    "!**/.*"
   ],
+  "scripts": {
+    "example": "yarn workspace react-native-audio-effects-example",
+    "clean": "del-cli android/build example/android/build example/android/app/build example/ios/build lib",
+    "prepare": "bob build",
+    "typecheck": "tsc",
+    "lint": "eslint \"**/*.{js,ts,tsx}\"",
+    "test": "jest"
+  },
+  "keywords": [
+    "react-native",
+    "ios",
+    "android",
+    "audio",
+    "audio-effects",
+    "dsp",
+    "reverb",
+    "delay",
+    "chorus",
+    "phaser",
+    "flanger",
+    "compressor",
+    "equalizer",
+    "oscillator",
+    "synthesizer",
+    "music-production",
+    "audiokit",
+    "oboe",
+    "turbo-module",
+    "new-architecture"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/prateekchachra/react-native-audio-effects.git"
+  },
+  "author": "Prateek Chachra <prateekchachra6561@gmail.com> (https://github.com/prateekchachra)",
   "license": "Apache-2.0",
-  "packageManager": "yarn@3.6.4"
+  "bugs": {
+    "url": "https://github.com/prateekchachra/react-native-audio-effects/issues"
+  },
+  "homepage": "https://github.com/prateekchachra/react-native-audio-effects#readme",
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/"
+  },
+  "devDependencies": {
+    "@eslint/compat": "^2.1.0",
+    "@eslint/eslintrc": "^3.3.6",
+    "@eslint/js": "^9.39.5",
+    "@jest/globals": "^29.7.0",
+    "@react-native/babel-preset": "0.88.0",
+    "@react-native/eslint-config": "0.86.2",
+    "@react-native/jest-preset": "0.86.2",
+    "@types/react": "^19.2.0",
+    "del-cli": "^7.0.0",
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-ft-flow": "^3.0.11",
+    "eslint-plugin-prettier": "^5.5.6",
+    "jest": "^29.7.0",
+    "prettier": "^3.9.6",
+    "react": "19.3.0",
+    "react-native": "0.88.0",
+    "react-native-builder-bob": "^0.43.2",
+    "react-native-gesture-handler": "^3.4.0",
+    "react-native-reanimated": "^4.7.1",
+    "react-native-svg": "^15.16.0",
+    "react-native-worklets": "^0.13.0",
+    "turbo": "^2.10.8",
+    "typescript": "^6.0.3"
+  },
+  "peerDependencies": {
+    "@react-native-documents/picker": ">=10.0.0",
+    "react": "*",
+    "react-native": "*",
+    "react-native-gesture-handler": ">=2.16.0",
+    "react-native-reanimated": ">=3.16.0",
+    "react-native-svg": ">=15.0.0",
+    "react-native-worklets": ">=0.5.0"
+  },
+  "peerDependenciesMeta": {
+    "@react-native-documents/picker": {
+      "optional": true
+    },
+    "react-native-gesture-handler": {
+      "optional": true
+    },
+    "react-native-reanimated": {
+      "optional": true
+    },
+    "react-native-svg": {
+      "optional": true
+    },
+    "react-native-worklets": {
+      "optional": true
+    }
+  },
+  "workspaces": [
+    "example"
+  ],
+  "packageManager": "yarn@4.11.0",
+  "react-native-builder-bob": {
+    "source": "src",
+    "output": "lib",
+    "targets": [
+      [
+        "module",
+        {
+          "esm": true
+        }
+      ],
+      [
+        "typescript",
+        {
+          "project": "tsconfig.build.json"
+        }
+      ]
+    ]
+  },
+  "codegenConfig": {
+    "name": "AudioEffectsSpec",
+    "type": "modules",
+    "jsSrcsDir": "src",
+    "android": {
+      "javaPackageName": "com.audioeffects"
+    }
+  },
+  "prettier": {
+    "quoteProps": "consistent",
+    "singleQuote": true,
+    "tabWidth": 2,
+    "trailingComma": "es5",
+    "useTabs": false
+  },
+  "jest": {
+    "preset": "@react-native/jest-preset",
+    "testEnvironmentOptions": {
+      "customExportConditions": [
+        "require",
+        "react-native",
+        "<%- project.sourceCondition -%>"
+      ]
+    },
+    "modulePathIgnorePatterns": [
+      "<rootDir>/example/node_modules",
+      "<rootDir>/lib/"
+    ]
+  },
+  "create-react-native-library": {
+    "type": "turbo-module",
+    "languages": "kotlin-objc",
+    "tools": [
+      "eslint",
+      "jest"
+    ],
+    "version": "0.63.1"
+  }
 }

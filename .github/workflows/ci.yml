@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: yarn lint
+      - run: yarn typecheck
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      # Includes the schema/native parity suite, which reads the Swift and
+      # Kotlin registries and fails if either stops matching the schema.
+      # That is the guard against a control that moves but does nothing.
+      - run: yarn test
+
+  build-library:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: yarn prepare
+      # The published entrypoints must exist. v1 shipped a `main` pointing at
+      # a file nothing built, so this is checked explicitly.
+      - name: Verify build output
+        run: |
+          test -f lib/module/index.js
+          test -f lib/module/ui/index.js
+          test -f lib/typescript/src/index.d.ts
+          test -f lib/typescript/src/ui/index.d.ts
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: yarn prepare
+      - name: Pack and inspect the tarball
+        run: |
+          npm pack --silent
+          tar -tzf react-native-audio-effects-*.tgz > files.txt
+          echo "--- tarball contents ---"
+          sed 's|^package/||' files.txt | sort
+          echo "--- assertions ---"
+          # The example app and its audio must never ship to npm.
+          ! grep -q '^package/example/' files.txt
+          ! grep -qi '\.mp3$\|\.aiff$\|\.wav$' files.txt
+          grep -q '^package/lib/module/index.js$' files.txt
+          grep -q '^package/AudioEffects.podspec$' files.txt
+          grep -q '^package/android/build.gradle$' files.txt
+
+  build-ios:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - name: Cache Pods
+        uses: actions/cache@v4
+        with:
+          path: example/ios/Pods
+          key: ${{ runner.os }}-pods-${{ hashFiles('example/ios/Podfile.lock', 'AudioEffects.podspec') }}
+      - name: Install pods
+        working-directory: example/ios
+        # AudioKit arrives through spm_dependency (it is SPM-only), and Swift
+        # packages linked into static pods fail at link time.
+        env:
+          USE_FRAMEWORKS: dynamic
+          RCT_NEW_ARCH_ENABLED: '1'
+        run: pod install
+      - name: Build
+        working-directory: example/ios
+        run: |
+          xcodebuild \
+            -workspace AudioEffectsExample.xcworkspace \
+            -scheme AudioEffectsExample \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build
+        working-directory: example/android
+        # Klarinet publishes only arm64-v8a, armeabi-v7a and x86_64.
+        run: ./gradlew assembleDebug --no-daemon -PreactNativeArchitectures=arm64-v8a

@@ -1,21 +1,73 @@
 buildscript {
-    ext {
-        buildToolsVersion = "34.0.0"
-        minSdkVersion = 23
-        compileSdkVersion = 34
-        targetSdkVersion = 34
-        ndkVersion = "26.1.10909125"
-        kotlinVersion = "1.9.24"
+  ext.AudioEffects = [
+    kotlinVersion: "2.4.20",
+    // Klarinet's floor. It also ships only arm64-v8a, armeabi-v7a and
+    // x86_64 -- there is no x86 slice, so very old emulator images will not
+    // run this.
+    minSdkVersion: 24,
+    compileSdkVersion: 36,
+    klarinetVersion: "0.5.0"
+  ]
+
+  ext.getExtOrDefault = { prop ->
+    if (rootProject.ext.has(prop)) {
+      return rootProject.ext.get(prop)
     }
-    repositories {
-        google()
-        mavenCentral()
-    }
-    dependencies {
-        classpath("com.android.tools.build:gradle")
-        classpath("com.facebook.react:react-native-gradle-plugin")
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin")
-    }
+
+    return AudioEffects[prop]
+  }
+
+  repositories {
+    google()
+    mavenCentral()
+  }
+
+  dependencies {
+    classpath "com.android.tools.build:gradle:8.7.2"
+    // noinspection DifferentKotlinGradleVersion
+    classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:${getExtOrDefault('kotlinVersion')}"
+  }
 }
 
-apply plugin: "com.facebook.react.rootproject"
+
+apply plugin: "com.android.library"
+
+if (project.extensions.findByName("kotlin") == null) {
+  apply plugin: "kotlin-android"
+}
+
+
+apply plugin: "com.facebook.react"
+
+android {
+  namespace "com.audioeffects"
+
+  compileSdkVersion getExtOrDefault("compileSdkVersion")
+
+  defaultConfig {
+    minSdkVersion getExtOrDefault("minSdkVersion")
+  }
+
+  compileOptions {
+    sourceCompatibility JavaVersion.VERSION_17
+    targetCompatibility JavaVersion.VERSION_17
+  }
+}
+
+repositories {
+  google()
+  mavenCentral()
+}
+
+dependencies {
+  implementation "com.facebook.react:react-android"
+
+  // Klarinet is the Android DSP backend: a Kotlin Multiplatform wrapper over
+  // Google Oboe with a C++ effect core. Gradle module metadata resolves this
+  // to the klarinet-android variant.
+  //
+  // It is reached only through the AudioBackend interface in backend/, never
+  // directly from the TurboModule, so it can be swapped for an in-house
+  // Oboe + C++ core without touching the module or any JavaScript.
+  implementation "com.vectencia.klarinet:klarinet:${getExtOrDefault('klarinetVersion')}"
+}

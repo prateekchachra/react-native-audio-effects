@@ -128,6 +128,28 @@ await osc.play({ loop: true });
 osc.setOscillatorParam('frequency', 220);
 ```
 
+### Playing notes
+
+Generators are driven in hertz, but music is thought about in notes, so the
+kit ships a playable keyboard and the conversion to go with it. Note numbers
+are standard MIDI, so the same handlers accept input from a controller or a
+sequencer without translation.
+
+```tsx
+import { midiToFrequency, noteName } from 'react-native-audio-effects';
+import { Keyboard } from 'react-native-audio-effects/ui';
+
+<Keyboard
+  startOctave={3}
+  octaves={2}
+  onNoteOn={(midi) => osc.setOscillatorParam('frequency', midiToFrequency(midi))}
+  onNoteOff={() => osc.stop()}
+/>;
+```
+
+`midiToFrequency` takes a tuning reference, so `midiToFrequency(69, 432)`
+works if you need something other than A440.
+
 ### Metering
 
 ```ts

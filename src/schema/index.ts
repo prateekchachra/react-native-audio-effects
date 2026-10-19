@@ -66,6 +66,14 @@ export {
 
 export { formatNumber, formatValue, unitLabel } from './format';
 
+export {
+  frequencyToMidi,
+  isBlackKey,
+  midiToFrequency,
+  noteName,
+  octaveStart,
+} from './music';
+
 import { EFFECTS } from './effects';
 import type { EffectDescriptor, ParamDescriptor, Platform } from './types';
 

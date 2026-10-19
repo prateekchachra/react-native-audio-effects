@@ -20,6 +20,9 @@ export type { EffectPanelProps, EffectRackProps } from './EffectRack';
 export { EffectSlider } from './EffectSlider';
 export type { EffectSliderProps } from './EffectSlider';
 
+export { Keyboard } from './Keyboard';
+export type { KeyboardProps } from './Keyboard';
+
 export { Knob } from './Knob';
 export type { KnobProps } from './Knob';
 

@@ -67,14 +67,16 @@ export interface KnobProps {
   theme?: Partial<AudioTheme>;
 }
 
-function polar(cx: number, cy: number, radius: number, degrees: number) {
-  'worklet';
-  const radians = ((degrees - 90) * Math.PI) / 180;
-  return {
-    x: cx + radius * Math.cos(radians),
-    y: cy + radius * Math.sin(radians),
-  };
-}
+/**
+ * Geometry helpers.
+ *
+ * These are deliberately self-contained — no calls out to other helpers, only
+ * `Math`. `arcPath` runs in two places: on the UI thread inside
+ * `useAnimatedProps`, and on the JS thread during render to draw the static
+ * track. A worklet that calls another worklet is not resolvable in the second
+ * case, which crashes with "undefined is not a function" the moment a knob
+ * first renders. Inlining the arithmetic keeps both call sites valid.
+ */
 
 /** SVG arc path from the knob's zero position to `normalized`. */
 function arcPath(
@@ -84,19 +86,21 @@ function arcPath(
   normalized: number
 ): string {
   'worklet';
+  const t = normalized < 0 ? 0 : normalized > 1 ? 1 : normalized;
   const startAngle = 180 - ARC_DEGREES / 2;
-  const sweep = ARC_DEGREES * clampWorklet(normalized, 0, 1);
+  const sweep = ARC_DEGREES * t;
   // A zero-length arc renders nothing; nudge so the cap still shows.
   const endAngle = startAngle + Math.max(sweep, 0.001);
-  const start = polar(cx, cy, radius, startAngle);
-  const end = polar(cx, cy, radius, endAngle);
-  const largeArc = sweep > 180 ? 1 : 0;
-  return `M ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArc} 1 ${end.x} ${end.y}`;
-}
 
-function clampWorklet(value: number, min: number, max: number) {
-  'worklet';
-  return value < min ? min : value > max ? max : value;
+  const startRad = ((startAngle - 90) * Math.PI) / 180;
+  const endRad = ((endAngle - 90) * Math.PI) / 180;
+  const x1 = cx + radius * Math.cos(startRad);
+  const y1 = cy + radius * Math.sin(startRad);
+  const x2 = cx + radius * Math.cos(endRad);
+  const y2 = cy + radius * Math.sin(endRad);
+  const largeArc = sweep > 180 ? 1 : 0;
+
+  return `M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2}`;
 }
 
 export function Knob({
@@ -143,7 +147,8 @@ export function Knob({
           const scale =
             Math.abs(event.translationX) > FINE_MODE_PX ? FINE_SCALE : 1;
           const delta = (-event.translationY / FULL_SWEEP_PX) * scale;
-          const next = clampWorklet(gestureStart.value + delta, 0, 1);
+          const raw = gestureStart.value + delta;
+          const next = raw < 0 ? 0 : raw > 1 ? 1 : raw;
           position.value = next;
           runOnJS(emit)(next, false);
         })
@@ -182,9 +187,17 @@ export function Knob({
 
   const animatedPointer = useAnimatedProps(() => {
     const angle = 180 - ARC_DEGREES / 2 + ARC_DEGREES * position.value;
-    const outer = polar(center, center, radius - 4, angle);
-    const inner = polar(center, center, radius * 0.45, angle);
-    return { x1: inner.x, y1: inner.y, x2: outer.x, y2: outer.y };
+    const radians = ((angle - 90) * Math.PI) / 180;
+    const cos = Math.cos(radians);
+    const sin = Math.sin(radians);
+    const outerRadius = radius - 4;
+    const innerRadius = radius * 0.45;
+    return {
+      x1: center + innerRadius * cos,
+      y1: center + innerRadius * sin,
+      x2: center + outerRadius * cos,
+      y2: center + outerRadius * sin,
+    };
   });
 
   const strokeColor = disabled ? theme.disabled : theme.accent;

@@ -12,6 +12,8 @@ import {
   GENERATORS,
   SINE,
   getGenerator,
+  midiToFrequency,
+  noteName,
   type Effect,
   type EffectType,
   type Source,
@@ -19,6 +21,7 @@ import {
 } from 'react-native-audio-effects';
 import {
   EffectRack,
+  Keyboard,
   Knob,
   LevelMeter,
   darkTheme,
@@ -45,6 +48,7 @@ export function GeneratorsScreen() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [frequency, setFrequency] = useState(220);
   const [amplitude, setAmplitude] = useState(0.3);
+  const [lastNote, setLastNote] = useState<number>();
 
   const levels = useLiveLevels(source);
   const descriptor = getGenerator(waveform);
@@ -89,6 +93,35 @@ export function GeneratorsScreen() {
     } else {
       await source.play({ loop: true });
       setIsPlaying(true);
+    }
+  }, [source, isPlaying]);
+
+  // Playing a note retunes the oscillator and starts it if it was idle, so a
+  // key press is audible without having to hit Play first.
+  const noteOn = useCallback(
+    async (midi: number) => {
+      if (!source) {
+        return;
+      }
+      const hz = midiToFrequency(midi);
+      setLastNote(midi);
+      setFrequency(hz);
+      source.setOscillatorParam('frequency', hz);
+      if (!isPlaying) {
+        await source.play({ loop: true });
+        setIsPlaying(true);
+      }
+    },
+    [source, isPlaying]
+  );
+
+  // Hold-to-sound: releasing silences the oscillator again. A real instrument
+  // would use an envelope here; this is a single-voice generator, so gating
+  // amplitude is the honest equivalent.
+  const noteOff = useCallback(async () => {
+    if (source && isPlaying) {
+      await source.stop();
+      setIsPlaying(false);
     }
   }, [source, isPlaying]);
 
@@ -180,6 +213,24 @@ export function GeneratorsScreen() {
         <Text style={styles.buttonText}>{isPlaying ? 'Stop' : 'Play'}</Text>
       </Pressable>
 
+      {isPitched ? (
+        <>
+          <View style={styles.keyboardHeader}>
+            <Text style={styles.subheading}>Keyboard</Text>
+            <Text style={styles.noteReadout}>
+              {lastNote !== undefined ? noteName(lastNote) : '--'}
+            </Text>
+          </View>
+          <Keyboard
+            startOctave={3}
+            octaves={2}
+            onNoteOn={noteOn}
+            onNoteOff={noteOff}
+            activeNotes={isPlaying && lastNote !== undefined ? [lastNote] : []}
+          />
+        </>
+      ) : null}
+
       <Text style={styles.subheading}>Add an effect</Text>
       <View style={styles.chips}>
         {QUICK_EFFECTS.map((type) => (
@@ -229,6 +280,17 @@ const styles = StyleSheet.create({
   description: {
     color: darkTheme.textMuted,
     fontSize: 12,
+  },
+  keyboardHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+  },
+  noteReadout: {
+    color: darkTheme.accent,
+    fontSize: 13,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
   },
   controls: {
     flexDirection: 'row',

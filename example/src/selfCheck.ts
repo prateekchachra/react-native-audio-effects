@@ -18,6 +18,7 @@ import {
   getCapabilities,
   getEffect,
   isEffectAvailable,
+  isParamAvailable,
   type EffectType,
   type Waveform,
 } from 'react-native-audio-effects';
@@ -232,6 +233,109 @@ export async function runSelfCheck(): Promise<CheckResult[]> {
       })
     );
   }
+
+  // 6b. Replaying after pause and after stop ------------------------------
+  // "Press play, press pause, press play again" is the single most common
+  // interaction and the easiest one to get wrong, because pause and stop
+  // leave the player in different states.
+  try {
+    await source.play({ loop: true });
+    const first = await awaitSignal(source.id, 700);
+    await source.pause();
+    await source.play({ loop: true });
+    const afterPause = await awaitSignal(source.id, 700);
+    await source.pause();
+    results.push(
+      log({
+        name: 'replay after pause',
+        ok: afterPause > 0.0001,
+        detail: `first=${first.toFixed(5)} afterPause=${afterPause.toFixed(5)}`,
+      })
+    );
+  } catch (error) {
+    results.push(
+      log({ name: 'replay after pause', ok: false, detail: String(error) })
+    );
+  }
+
+  try {
+    await source.stop();
+    await source.play({ loop: true });
+    const afterStop = await awaitSignal(source.id, 700);
+    await source.stop();
+    results.push(
+      log({
+        name: 'replay after stop',
+        ok: afterStop > 0.0001,
+        detail: `afterStop=${afterStop.toFixed(5)}`,
+      })
+    );
+  } catch (error) {
+    results.push(
+      log({ name: 'replay after stop', ok: false, detail: String(error) })
+    );
+  }
+
+  // 6c. The calls the screens make when you tap an effect chip ------------
+  try {
+    const probes = EFFECTS.map((descriptor) => ({
+      type: descriptor.type,
+      available: isEffectAvailable(descriptor.type),
+      params: descriptor.params.map((param) => ({
+        key: param.key,
+        available: isParamAvailable(descriptor.type, param.key),
+      })),
+    }));
+    results.push(
+      log({
+        name: 'capability lookups for every effect',
+        ok: probes.length === EFFECTS.length,
+        detail: `${probes.filter((p) => p.available).length}/${probes.length} available here`,
+      })
+    );
+  } catch (error) {
+    results.push(
+      log({
+        name: 'capability lookups for every effect',
+        ok: false,
+        detail: String(error),
+      })
+    );
+  }
+
+  // 6d. Adding then removing every available effect ------------------------
+  await source.clearEffects();
+  for (const descriptor of EFFECTS) {
+    if (!isEffectAvailable(descriptor.type)) {
+      continue;
+    }
+    try {
+      const effect = await source.addEffect(descriptor.type);
+      // Touch every parameter the way EffectPanel does on first render.
+      for (const param of effect.params) {
+        effect.get(param.key);
+        if (isParamAvailable(descriptor.type, param.key)) {
+          effect.set(param.key, param.default);
+        }
+      }
+      await source.removeEffect(effect);
+    } catch (error) {
+      results.push(
+        log({
+          name: `add/remove ${descriptor.type}`,
+          ok: false,
+          detail: String(error),
+        })
+      );
+    }
+  }
+  results.push(
+    log({
+      name: 'add/remove every available effect',
+      ok: source.effects.length === 0,
+      detail: `chain back to ${source.effects.length} effects`,
+    })
+  );
 
   await source.release();
 

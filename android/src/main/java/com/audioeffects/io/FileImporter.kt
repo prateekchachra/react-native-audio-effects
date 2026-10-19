@@ -60,9 +60,15 @@ internal class FileImporter(private val context: Context) {
     val name = parsed.lastPathSegment?.substringAfterLast('/') ?: "audio"
     val destination = File(cacheDir(), "${System.nanoTime()}-$name")
 
-    val stream = when (parsed.scheme) {
-      "content" -> context.contentResolver.openInputStream(parsed)
-      "file", null -> File(parsed.path ?: uri).inputStream()
+    val stream = when {
+      parsed.scheme == "content" -> context.contentResolver.openInputStream(parsed)
+      parsed.scheme == "file" -> File(parsed.path ?: uri).inputStream()
+      // A bare relative path is a bundled asset. This is the Android
+      // counterpart of resolving against the main bundle on iOS, so the same
+      // `"Samples/beat.aiff"` works on both platforms.
+      parsed.scheme == null && !uri.startsWith("/") ->
+        runCatching { context.assets.open(uri) }.getOrNull()
+      parsed.scheme == null -> File(uri).inputStream()
       else -> context.contentResolver.openInputStream(parsed)
     } ?: throw AudioEffectsException.FileNotFound(uri)
 

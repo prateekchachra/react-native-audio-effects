@@ -28,7 +28,7 @@ type TabKey = (typeof TABS)[number]['key'];
  * device log. See src/selfCheck.ts — this is how the iOS implementation is
  * verified, since unit tests cannot tell you whether audio is really flowing.
  */
-const RUN_SELF_CHECK_ON_LAUNCH = false;
+const RUN_SELF_CHECK_ON_LAUNCH = true;
 
 export default function App() {
   const [tab, setTab] = useState<TabKey>('studio');

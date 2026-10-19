@@ -38,7 +38,10 @@ function reportCleanupFailure(error: unknown): void {
  * Tears the engine down on unmount, so mount this once near the root rather
  * than in every screen.
  */
-export function useAudioEngine(options: EngineOptions = {}) {
+export function useAudioEngine(options: EngineOptions = {}): {
+  isReady: boolean;
+  error: Error | undefined;
+} {
   const [isReady, setIsReady] = useState(false);
   const [error, setError] = useState<Error>();
 
@@ -70,7 +73,7 @@ export function useAudioEngine(options: EngineOptions = {}) {
     };
   }, []);
 
-  return { isReady, error, engine: AudioEngine };
+  return { isReady, error };
 }
 
 /**

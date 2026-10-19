@@ -8,6 +8,14 @@
  *
  * Black keys overlay the white ones at their true positions, so the layout
  * matches a piano rather than spacing all twelve semitones evenly.
+ *
+ * ## Latch or hold
+ *
+ * Pass {@link KeyboardProps.onNoteOff} for hold-to-sound: the note stops when
+ * the finger lifts. Omit it to latch, and drive the highlight yourself
+ * through {@link KeyboardProps.activeNotes} — on a touchscreen that is
+ * usually the better default, since a finger covers the key it is playing
+ * and you cannot sustain a note while reaching for a knob.
  */
 
 import { useCallback, useMemo, useState } from 'react';
@@ -41,9 +49,15 @@ export interface KeyboardProps {
   octaves?: number;
   /** Fired with a MIDI note number when a key goes down. */
   onNoteOn: (midi: number) => void;
-  /** Fired when the key is released. Omit for a one-shot trigger. */
+  /**
+   * Fired when the finger lifts. Omit to latch — see the note on latch
+   * versus hold above.
+   */
   onNoteOff?: (midi: number) => void;
-  /** Notes to draw as held, e.g. from a sequencer. */
+  /**
+   * Notes to draw as held. Required when latching, since the component's own
+   * press state only lasts as long as the touch.
+   */
   activeNotes?: readonly number[];
   height?: number;
   /** Label the C of each octave, which is the usual orientation cue. */

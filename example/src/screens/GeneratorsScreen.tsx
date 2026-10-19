@@ -51,7 +51,10 @@ export function GeneratorsScreen() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [frequency, setFrequency] = useState(220);
   const [amplitude, setAmplitude] = useState(0.3);
-  const [lastNote, setLastNote] = useState<number>();
+  /** The latched note, or undefined when nothing is sounding. */
+  const [activeNote, setActiveNote] = useState<number>();
+  /** The stream runs continuously once started; notes are gated on top. */
+  const streamStarted = useRef(false);
   const [envelope, setEnvelope] =
     useState<Record<string, number>>(envelopeDefaults);
 
@@ -88,6 +91,8 @@ export function GeneratorsScreen() {
       setSource(created);
       setEffects([]);
       setIsPlaying(false);
+      setActiveNote(undefined);
+      streamStarted.current = false;
     })();
 
     return () => {
@@ -105,42 +110,65 @@ export function GeneratorsScreen() {
     }
     if (isPlaying) {
       await source.stop();
+      streamStarted.current = false;
+      setActiveNote(undefined);
       setIsPlaying(false);
     } else {
       await source.play({ loop: true });
+      streamStarted.current = true;
       setIsPlaying(true);
     }
   }, [source, isPlaying]);
 
-  // Playing a note retunes the oscillator and starts it if it was idle, so a
-  // key press is audible without having to hit Play first.
+  /**
+   * Latching, monophonic keyboard.
+   *
+   * Tapping a key starts it and leaves it sounding; tapping the same key
+   * again stops it; tapping a different key replaces whatever was playing.
+   * Hold-to-sound is wrong on a touchscreen — your finger covers the key you
+   * are trying to hear, and you cannot sustain a note while reaching for a
+   * knob.
+   *
+   * The stream itself runs continuously once started. Notes are the envelope
+   * gate opening and closing on top of it, so there is no click or restart
+   * latency per key.
+   */
   const noteOn = useCallback(
     async (midi: number) => {
       if (!source) {
         return;
       }
+
+      // Same key again: stop.
+      if (activeNote === midi) {
+        source.gate(false);
+        setActiveNote(undefined);
+        setIsPlaying(false);
+        return;
+      }
+
       const hz = midiToFrequency(midi);
-      setLastNote(midi);
       setFrequency(hz);
       source.setOscillatorParam('frequency', hz);
-      // The stream runs continuously; the envelope gate is what makes a note.
-      // Restarting the stream per key press would click and add latency.
-      if (!isPlaying) {
+
+      if (!streamStarted.current) {
         await source.play({ loop: true });
-        setIsPlaying(true);
+        streamStarted.current = true;
+      }
+
+      // Close before opening so a new key restarts the attack rather than
+      // sliding to the new pitch — closing alone would be a release, and
+      // opening alone is a no-op on an already-open envelope.
+      if (activeNote !== undefined) {
+        source.gate(false);
       }
       source.gate(true);
-    },
-    [source, isPlaying]
-  );
 
-  // Hold-to-sound: releasing silences the oscillator again. A real instrument
-  // would use an envelope here; this is a single-voice generator, so gating
-  // amplitude is the honest equivalent.
-  const noteOff = useCallback(() => {
-    // Release the envelope and let it ring out; the stream stays up.
-    source?.gate(false);
-  }, [source]);
+      setActiveNote(midi);
+      setIsPlaying(true);
+    },
+    [source, activeNote]
+  );
 
   const setEnvelopeParam = useCallback(
     (key: string, value: number) => {
@@ -263,15 +291,16 @@ export function GeneratorsScreen() {
           <View style={styles.keyboardHeader}>
             <Text style={styles.subheading}>Keyboard</Text>
             <Text style={styles.noteReadout}>
-              {lastNote !== undefined ? noteName(lastNote) : '--'}
+              {activeNote !== undefined ? noteName(activeNote) : '--'}
             </Text>
           </View>
+          {/* No onNoteOff: keys latch, so lifting a finger leaves the note
+              sounding until it or another key is tapped. */}
           <Keyboard
             startOctave={3}
             octaves={2}
             onNoteOn={noteOn}
-            onNoteOff={noteOff}
-            activeNotes={isPlaying && lastNote !== undefined ? [lastNote] : []}
+            activeNotes={activeNote !== undefined ? [activeNote] : []}
           />
         </>
       ) : null}

@@ -158,23 +158,31 @@ export function GeneratorsScreen() {
         return;
       }
 
+      // Latch the key before anything asynchronous. Starting the stream is
+      // awaited below, and if that threw or was slow the highlight would
+      // never land — the key would flash and go dark while the note played.
+      activeNoteRef.current = midi;
+      setActiveNote(midi);
+      setIsPlaying(true);
+
       const hz = midiToFrequency(midi);
       setFrequency(hz);
       source.setOscillatorParam('frequency', hz);
 
       if (!streamStarted.current) {
-        await source.play({ loop: true });
-        streamStarted.current = true;
+        try {
+          await source.play({ loop: true });
+          streamStarted.current = true;
+        } catch {
+          // Leave the latch alone: the gate below is still worth trying,
+          // and clearing it here would make the key flicker.
+        }
       }
 
       // A second note-on retriggers the envelope natively — the backend
       // knows the gate is already open and gives the close a render block
       // to land before reopening.
       source.gate(true);
-
-      activeNoteRef.current = midi;
-      setActiveNote(midi);
-      setIsPlaying(true);
     },
     [source]
   );
@@ -306,8 +314,7 @@ export function GeneratorsScreen() {
           {/* No onNoteOff: keys latch, so lifting a finger leaves the note
               sounding until it or another key is tapped. */}
           <Keyboard
-            startOctave={3}
-            octaves={2}
+            fullRange
             onNoteOn={noteOn}
             activeNotes={activeNote !== undefined ? [activeNote] : []}
           />

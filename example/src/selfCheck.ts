@@ -11,6 +11,7 @@
  * the device log.
  */
 
+import { Platform } from 'react-native';
 import {
   AudioEngine,
   EFFECTS,
@@ -74,8 +75,9 @@ export async function runSelfCheck(): Promise<CheckResult[]> {
 
     // The schema and the native registry must agree, or a control will move
     // and do nothing.
+    const platform = Platform.OS === 'ios' ? 'ios' : 'android';
     const mismatches = EFFECTS.filter(
-      (e) => e.platforms.includes('ios') !== isEffectAvailable(e.type)
+      (e) => e.platforms.includes(platform) !== isEffectAvailable(e.type)
     ).map((e) => e.type);
     results.push(
       log({
@@ -83,7 +85,7 @@ export async function runSelfCheck(): Promise<CheckResult[]> {
         ok: mismatches.length === 0,
         detail:
           mismatches.length === 0
-            ? 'schema platforms match getCapabilities()'
+            ? `schema platforms match getCapabilities() on ${platform}`
             : `mismatched: ${mismatches.join(', ')}`,
       })
     );
@@ -180,13 +182,14 @@ export async function runSelfCheck(): Promise<CheckResult[]> {
 
   // 5. Unavailable effects reject, not no-op ------------------------------
   try {
-    const androidOnly = EFFECTS.filter((e) => !e.platforms.includes('ios'));
+    const other = Platform.OS === 'ios' ? 'ios' : 'android';
+    const androidOnly = EFFECTS.filter((e) => !e.platforms.includes(other));
     if (androidOnly.length === 0) {
       results.push(
         log({
           name: 'unavailable effect rejects',
           ok: true,
-          detail: 'no iOS-unavailable effects to test',
+          detail: `nothing unavailable on ${other} to test`,
         })
       );
     } else {
@@ -236,6 +239,146 @@ export async function runSelfCheck(): Promise<CheckResult[]> {
     );
   }
 
+  // 6a. An effect must actually change the audio --------------------------
+  // Handles and parameter round-trips prove nothing about the signal path.
+  // A gain effect pinned to -60 dB has to make the source effectively
+  // silent; if it does not, the chain is not in the path at all.
+  try {
+    await source.clearEffects();
+    await source.play({ loop: true });
+    const dry = await awaitSignal(source.id, 900);
+
+    const gain = await source.addEffect('gain');
+    gain.set('level', -60);
+    const attenuated = await awaitSignal(source.id, 900);
+
+    gain.set('level', 0);
+    const restored = await awaitSignal(source.id, 900);
+
+    await source.pause();
+    await source.clearEffects();
+
+    results.push(
+      log({
+        name: 'effects are in the signal path',
+        ok: dry > 0.01 && attenuated < dry * 0.2 && restored > dry * 0.4,
+        detail:
+          `dry=${dry.toFixed(4)} ` +
+          `at -60dB=${attenuated.toFixed(4)} ` +
+          `restored=${restored.toFixed(4)}`,
+      })
+    );
+  } catch (error) {
+    results.push(
+      log({
+        name: 'effects are in the signal path',
+        ok: false,
+        detail: String(error),
+      })
+    );
+  }
+
+  // 6a-2. A filter must audibly change the spectrum ------------------------
+  try {
+    await source.clearEffects();
+    await source.play({ loop: true });
+    const open = await awaitSignal(source.id, 900);
+
+    const filter = await source.addEffect('lowPassFilter');
+    filter.set('cutoff', 60);
+    const filtered = await awaitSignal(source.id, 900);
+
+    await source.pause();
+    await source.clearEffects();
+
+    results.push(
+      log({
+        name: 'low-pass filter changes the signal',
+        ok: open > 0.01 && filtered < open * 0.8,
+        detail: `open=${open.toFixed(4)} at 60Hz=${filtered.toFixed(4)}`,
+      })
+    );
+  } catch (error) {
+    results.push(
+      log({
+        name: 'low-pass filter changes the signal',
+        ok: false,
+        detail: String(error),
+      })
+    );
+  }
+
+  // 6a-3. Every effect must audibly change the signal ---------------------
+  // Settings chosen to be unmistakable rather than musical: fully wet, and
+  // extreme enough that the level or spectrum has to move. An effect that
+  // leaves the measurement unchanged is not in the signal path.
+  const EXTREME: Partial<Record<string, Record<string, number>>> = {
+    gain: { level: -60 },
+    pan: { pan: -1 },
+    delay: { time: 500, feedback: 0.9, mix: 1 },
+    reverb: { roomSize: 0.95, damping: 0.1, mix: 1 },
+    chorus: { rate: 8, depth: 1, mix: 1 },
+    flanger: { rate: 6, depth: 1, feedback: 0.9, mix: 1 },
+    phaser: { rate: 8, depth: 1, feedback: 0.9 },
+    tremolo: { rate: 18, depth: 1 },
+    compressor: { threshold: -55, ratio: 20, attack: 0.1, release: 10 },
+    limiter: { threshold: -55, release: 1 },
+    noiseGate: { threshold: 0, attack: 0.1, release: 10 },
+    parametricEq: {
+      band0Gain: -20,
+      band1Gain: -20,
+      band2Gain: -20,
+      band3Gain: -20,
+    },
+    lowPassFilter: { cutoff: 40 },
+    highPassFilter: { cutoff: 18000 },
+    bandPassFilter: { center: 60, bandwidth: 0.1 },
+    distortion: { drive: 40, mix: 1 },
+    bitCrusher: { bitDepth: 1, sampleRate: 1000, mix: 1 },
+  };
+
+  for (const descriptor of EFFECTS) {
+    if (!isEffectAvailable(descriptor.type)) {
+      continue;
+    }
+    try {
+      await source.clearEffects();
+      await source.play({ loop: true });
+      const dry = await awaitSignal(source.id, 700);
+
+      const effect = await source.addEffect(descriptor.type);
+      const preset = EXTREME[descriptor.type] ?? {};
+      for (const [key, value] of Object.entries(preset)) {
+        if (isParamAvailable(descriptor.type, key)) {
+          effect.set(key, value);
+        }
+      }
+      const wet = await awaitSignal(source.id, 700);
+      await source.pause();
+      await source.clearEffects();
+
+      // A 12% swing either way is well outside the frame-to-frame variation
+      // of a looping sample, while staying loose enough not to demand a
+      // specific amount of change from each effect.
+      const change = dry > 0 ? Math.abs(wet - dry) / dry : 0;
+      results.push(
+        log({
+          name: `${descriptor.type} changes the signal`,
+          ok: dry > 0.01 && change > 0.12,
+          detail: `dry=${dry.toFixed(4)} wet=${wet.toFixed(4)} delta=${(change * 100).toFixed(1)}%`,
+        })
+      );
+    } catch (error) {
+      results.push(
+        log({
+          name: `${descriptor.type} changes the signal`,
+          ok: false,
+          detail: String(error),
+        })
+      );
+    }
+  }
+
   // 6b. Replaying after pause and after stop ------------------------------
   // "Press play, press pause, press play again" is the single most common
   // interaction and the easiest one to get wrong, because pause and stop
@@ -275,6 +418,30 @@ export async function runSelfCheck(): Promise<CheckResult[]> {
   } catch (error) {
     results.push(
       log({ name: 'replay after stop', ok: false, detail: String(error) })
+    );
+  }
+
+  // 6b-2. Seeking while playing -------------------------------------------
+  try {
+    await source.play({ loop: true });
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    await source.seek(source.info.durationSec * 0.5);
+    const afterSeek = await awaitSignal(source.id, 900);
+    await source.pause();
+    results.push(
+      log({
+        name: 'seek while playing keeps audio running',
+        ok: afterSeek > 0.0001,
+        detail: `peak after mid-file seek = ${afterSeek.toFixed(5)}`,
+      })
+    );
+  } catch (error) {
+    results.push(
+      log({
+        name: 'seek while playing keeps audio running',
+        ok: false,
+        detail: String(error),
+      })
     );
   }
 

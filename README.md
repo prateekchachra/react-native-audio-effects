@@ -140,11 +140,19 @@ sequencer without translation.
 import { midiToFrequency, noteName } from 'react-native-audio-effects';
 import { Keyboard } from 'react-native-audio-effects/ui';
 
+// Two octaves, hold-to-sound.
 <Keyboard
   startOctave={3}
   octaves={2}
   onNoteOn={(midi) => osc.setOscillatorParam('frequency', midiToFrequency(midi))}
   onNoteOff={() => osc.stop()}
+/>;
+
+// All 88 keys, scrolling, latching. Drive the highlight yourself.
+<Keyboard
+  fullRange
+  onNoteOn={play}
+  activeNotes={note !== undefined ? [note] : []}
 />;
 ```
 
@@ -319,7 +327,7 @@ Pitch: `midiToFrequency`, `frequencyToMidi`, `noteName`, `isBlackKey`,
 | `<XYPad>` | Two parameters at once, written as one atomic batch. |
 | `<LevelMeter>` | Peak and RMS on a decibel scale, with peak hold. |
 | `<WaveformView>` | Waveform, playhead and scrub-to-seek. |
-| `<Keyboard>` | MIDI keyboard. Latches by default; pass `onNoteOff` to hold. |
+| `<Keyboard>` | MIDI keyboard. `fullRange` gives all 88 keys with horizontal scrolling. Latches by default; pass `onNoteOff` to hold. |
 | `<PresetBar>` | Preset chips with A/B compare. |
 | `ThemeProvider`, `darkTheme`, `lightTheme`, `useAudioTheme` | Theming. |
 | `neuroRaised`, `neuroInner`, `neuroInset`, `labelStyle`, `readoutStyle` | Style helpers for building matching controls. |

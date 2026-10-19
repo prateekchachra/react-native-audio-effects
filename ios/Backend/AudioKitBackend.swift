@@ -134,10 +134,11 @@ final class AudioKitBackend {
         id: id,
         player: player,
         fileURL: imported.url,
-        durationSec: imported.durationSec
+        durationSec: imported.durationSec,
+        engine: engine
       )
       sources[id] = graph
-      rootMixer.addInput(graph.output)
+      rootMixer.addInput(graph.meter)
       engine.rebuildGraph()
 
       return [
@@ -162,9 +163,9 @@ final class AudioKitBackend {
 
       let id = nextId
       nextId += 1
-      let graph = SourceGraph(id: id, generator: generator)
+      let graph = SourceGraph(id: id, generator: generator, engine: engine)
       sources[id] = graph
-      rootMixer.addInput(graph.output)
+      rootMixer.addInput(graph.meter)
       engine.rebuildGraph()
       return id
     }
@@ -178,7 +179,7 @@ final class AudioKitBackend {
       for slot in graph.slots {
         slotOwner.removeValue(forKey: slot.id)
       }
-      rootMixer.removeInput(graph.output)
+      rootMixer.removeInput(graph.meter)
       graph.teardown()
       engine.rebuildGraph()
     }
@@ -228,7 +229,9 @@ final class AudioKitBackend {
 
   func setSourceVolume(_ sourceId: Int, volume: Float) {
     queue.sync {
-      sources[sourceId]?.output.volume = min(max(volume, 0), 1)
+      // The source's own fader, not the output mixer — the meter tap reads
+      // the mixer, and writing volume there would make the meter lie.
+      sources[sourceId]?.head.gain = min(max(volume, 0), 1)
     }
   }
 
@@ -297,6 +300,7 @@ final class AudioKitBackend {
       graph.addSlot(slot)
       slotOwner[id] = sourceId
       engine.rebuildGraph()
+      refreshMetering(graph)
       return id
     }
   }
@@ -310,6 +314,7 @@ final class AudioKitBackend {
       }
       slotOwner.removeValue(forKey: effectId)
       engine.rebuildGraph()
+      refreshMetering(graph)
     }
   }
 
@@ -320,6 +325,7 @@ final class AudioKitBackend {
         throw AudioEffectsError.invalidChainOrder
       }
       engine.rebuildGraph()
+      refreshMetering(graph)
     }
   }
 
@@ -365,6 +371,20 @@ final class AudioKitBackend {
       else { return 0 }
       return slot.values[key] ?? 0
     }
+  }
+
+  /**
+   Re-arm a source's meter after the graph was rebuilt.
+
+   Rebuilding drops installed taps, and `AmplitudeTap` keeps returning its
+   last reading rather than reporting that it has gone deaf — so a stale
+   tap looks exactly like silence. Re-arming is safe because the tap sits
+   on the source's fixed metering node, whose own wiring never changes.
+   */
+  private func refreshMetering(_ graph: SourceGraph) {
+    guard meteringEnabled else { return }
+    graph.stopMetering()
+    graph.startMetering()
   }
 
   // MARK: - Metering

@@ -69,11 +69,13 @@ export {
 export { formatNumber, formatValue, unitLabel } from './format';
 
 export {
+  detune,
   frequencyToMidi,
   isBlackKey,
   midiToFrequency,
   noteName,
   octaveStart,
+  unisonOffsets,
 } from './music';
 
 import { EFFECTS } from './effects';

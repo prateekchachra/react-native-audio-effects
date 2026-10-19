@@ -8,209 +8,134 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
-  AudioEngine,
   ENVELOPE_PARAMS,
   GENERATORS,
-  SINE,
+  LFO,
+  PolySynth,
   envelopeDefaults,
-  getEffect,
   getGenerator,
-  midiToFrequency,
   noteName,
-  type Effect,
-  type EffectType,
-  type Source,
+  type PlayMode,
   type Waveform,
 } from 'react-native-audio-effects';
-import {
-  EffectRack,
-  Keyboard,
-  Knob,
-  LevelMeter,
-  darkTheme,
-} from 'react-native-audio-effects/ui';
+import { Keyboard, Knob, darkTheme } from 'react-native-audio-effects/ui';
 
-import { useLiveLevels } from '../useLive';
-
-/** Effects worth reaching for on a raw oscillator. */
-const QUICK_EFFECTS: EffectType[] = [
-  'lowPassFilter',
-  'delay',
-  'reverb',
-  'tremolo',
-  'distortion',
+const MODES: Array<{ key: PlayMode; label: string; hint: string }> = [
+  {
+    key: 'poly',
+    label: 'Chord',
+    hint: 'Notes stack. Tap a held key to drop it.',
+  },
+  { key: 'mono', label: 'Mono', hint: 'One note; every note re-attacks.' },
+  {
+    key: 'legato',
+    label: 'Legato',
+    hint: 'One note; the envelope keeps running.',
+  },
+  {
+    key: 'portamento',
+    label: 'Porta',
+    hint: 'Legato, with the pitch gliding.',
+  },
 ];
 
-const FREQUENCY_PARAM = SINE.params[0]!;
-const AMPLITUDE_PARAM = SINE.params[1]!;
-
 export function GeneratorsScreen() {
-  const [waveform, setWaveform] = useState<Waveform>('sine');
-  const [source, setSource] = useState<Source>();
-  const [effects, setEffects] = useState<Effect[]>([]);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [frequency, setFrequency] = useState(220);
-  const [amplitude, setAmplitude] = useState(0.3);
-  /** The latched note, or undefined when nothing is sounding. */
-  const [activeNote, setActiveNote] = useState<number>();
-  /**
-   * Mirrors `activeNote` for the key handler.
-   *
-   * Two taps in quick succession can both run against the same render, so
-   * reading the state variable would make the second tap see a stale value
-   * and fail to toggle the note off.
-   */
-  const activeNoteRef = useRef<number | undefined>(undefined);
-  /** The stream runs continuously once started; notes are gated on top. */
-  const streamStarted = useRef(false);
+  const [waveform, setWaveform] = useState<Waveform>('sawtooth');
+  const [mode, setMode] = useState<PlayMode>('poly');
+  const [unison, setUnison] = useState(1);
+  const [synth, setSynth] = useState<PolySynth>();
+  const [activeNotes, setActiveNotes] = useState<number[]>([]);
+  const [lfoOn, setLfoOn] = useState(false);
   const [envelope, setEnvelope] =
     useState<Record<string, number>>(envelopeDefaults);
 
-  // Read inside the create effect without making it a dependency, which
-  // would rebuild the oscillator on every envelope tweak.
   const envelopeRef = useRef(envelope);
   envelopeRef.current = envelope;
+  const lfoRef = useRef<LFO | undefined>(undefined);
 
-  const levels = useLiveLevels(source);
   const descriptor = getGenerator(waveform);
   const isPitched = descriptor?.pitched ?? false;
 
-  // Switching waveform replaces the native source, so the old one is released
-  // and the chain starts over.
+  // Rebuilt when the waveform, mode or unison count changes, since each
+  // determines how many native sources the pool needs.
   useEffect(() => {
     let cancelled = false;
-    let created: Source | undefined;
+    let created: PolySynth | undefined;
 
     (async () => {
-      created = await AudioEngine.createOscillator(waveform, {
-        frequency,
-        amplitude,
+      created = await PolySynth.create({
+        waveform,
+        mode,
+        unison,
+        maxVoices: 6,
+        amplitude: 0.22,
       });
-      if (cancelled) {
-        await created.release();
-        return;
-      }
       for (const [key, value] of Object.entries(envelopeRef.current)) {
         created.setEnvelopeParam(
           key as 'attack' | 'decay' | 'sustain' | 'release',
           value
         );
       }
-      setSource(created);
-      setEffects([]);
-      setIsPlaying(false);
-      setActiveNote(undefined);
-      activeNoteRef.current = undefined;
-      streamStarted.current = false;
+      if (cancelled) {
+        await created.dispose();
+        return;
+      }
+      setSynth(created);
+      setActiveNotes([]);
     })();
 
     return () => {
       cancelled = true;
-      created?.release().catch(() => {});
-      setSource(undefined);
+      created?.dispose().catch(() => {});
+      setSynth(undefined);
     };
-    // Frequency and amplitude are applied live below, not by recreating.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [waveform]);
+  }, [waveform, mode, unison]);
 
-  const toggle = useCallback(async () => {
-    if (!source) {
+  // Modulated onto the synth's own level rather than an effect, because
+  // effects currently attach to a single source and this patch spans a
+  // whole voice pool. A per-synth effects bus is tracked as follow-up.
+  useEffect(() => {
+    lfoRef.current?.dispose();
+    lfoRef.current = undefined;
+
+    if (!lfoOn || !synth) {
       return;
     }
-    if (isPlaying) {
-      await source.stop();
-      streamStarted.current = false;
-      activeNoteRef.current = undefined;
-      setActiveNote(undefined);
-      setIsPlaying(false);
-    } else {
-      await source.play({ loop: true });
-      streamStarted.current = true;
-      setIsPlaying(true);
-    }
-  }, [source, isPlaying]);
+    const lfo = new LFO({ rate: 4, shape: 'sine', depth: 0.8 });
+    lfo.add({
+      min: 0.02,
+      max: 0.24,
+      write: (value) => synth.setAmplitude(value),
+    });
+    lfo.start();
+    lfoRef.current = lfo;
 
-  /**
-   * Latching, monophonic keyboard.
-   *
-   * Tapping a key starts it and leaves it sounding; tapping the same key
-   * again stops it; tapping a different key replaces whatever was playing.
-   * Hold-to-sound is wrong on a touchscreen — your finger covers the key you
-   * are trying to hear, and you cannot sustain a note while reaching for a
-   * knob.
-   *
-   * The stream itself runs continuously once started. Notes are the envelope
-   * gate opening and closing on top of it, so there is no click or restart
-   * latency per key.
-   */
+    return () => {
+      lfo.dispose();
+      synth.setAmplitude(0.22);
+    };
+  }, [lfoOn, synth]);
+
   const noteOn = useCallback(
-    async (midi: number) => {
-      if (!source) {
+    (midi: number) => {
+      if (!synth) {
         return;
       }
-
-      // Same key again: stop and let it ring out.
-      if (activeNoteRef.current === midi) {
-        source.gate(false);
-        activeNoteRef.current = undefined;
-        setActiveNote(undefined);
-        setIsPlaying(false);
-        return;
-      }
-
-      // Latch the key before anything asynchronous. Starting the stream is
-      // awaited below, and if that threw or was slow the highlight would
-      // never land — the key would flash and go dark while the note played.
-      activeNoteRef.current = midi;
-      setActiveNote(midi);
-      setIsPlaying(true);
-
-      const hz = midiToFrequency(midi);
-      setFrequency(hz);
-      source.setOscillatorParam('frequency', hz);
-
-      if (!streamStarted.current) {
-        try {
-          await source.play({ loop: true });
-          streamStarted.current = true;
-        } catch {
-          // Leave the latch alone: the gate below is still worth trying,
-          // and clearing it here would make the key flicker.
-        }
-      }
-
-      // A second note-on retriggers the envelope natively — the backend
-      // knows the gate is already open and gives the close a render block
-      // to land before reopening.
-      source.gate(true);
+      synth.noteOn(midi);
+      setActiveNotes(synth.activeNotes);
     },
-    [source]
+    [synth]
   );
 
   const setEnvelopeParam = useCallback(
     (key: string, value: number) => {
       setEnvelope((previous) => ({ ...previous, [key]: value }));
-      source?.setEnvelopeParam(
+      synth?.setEnvelopeParam(
         key as 'attack' | 'decay' | 'sustain' | 'release',
         value
       );
     },
-    [source]
-  );
-
-  const addEffect = useCallback(
-    async (type: EffectType) => {
-      if (!source) {
-        return;
-      }
-      try {
-        const effect = await source.addEffect(type);
-        setEffects((previous) => [...previous, effect]);
-      } catch {
-        // Unavailable on this platform; the chip is disabled anyway.
-      }
-    },
-    [source]
+    [synth]
   );
 
   return (
@@ -243,106 +168,88 @@ export function GeneratorsScreen() {
         <Text style={styles.description}>{descriptor.description}</Text>
       ) : null}
 
-      <View style={styles.controls}>
-        {isPitched ? (
-          <Knob
-            param={FREQUENCY_PARAM}
-            value={frequency}
-            onChange={(value) => {
-              setFrequency(value);
-              source?.setOscillatorParam('frequency', value);
-            }}
-            size={72}
-          />
-        ) : null}
-        <Knob
-          param={AMPLITUDE_PARAM}
-          value={amplitude}
-          onChange={(value) => {
-            setAmplitude(value);
-            source?.setOscillatorParam('amplitude', value);
-          }}
-          size={72}
-          label="Level"
-        />
-        <View style={styles.meters}>
-          <LevelMeter peak={levels.peakLeft} rms={levels.rmsLeft} length={72} />
-          <LevelMeter
-            peak={levels.peakRight}
-            rms={levels.rmsRight}
-            length={72}
-          />
-        </View>
-      </View>
-
-      {/* Noise has no notes to press, so it keeps a transport button.
-          Pitched sources are played from the keyboard instead. */}
-      {!isPitched ? (
-        <Pressable
-          onPress={toggle}
-          style={({ pressed }) => [
-            styles.button,
-            isPlaying && styles.buttonActive,
-            pressed && styles.buttonPressed,
-          ]}
-        >
-          <Text style={styles.buttonText}>{isPlaying ? 'Stop' : 'Play'}</Text>
-        </Pressable>
-      ) : null}
-
-      {isPitched ? (
-        <>
-          <Text style={styles.subheading}>Envelope</Text>
-          <View style={styles.adsrRow}>
-            {ENVELOPE_PARAMS.map((param) => (
-              <Knob
-                key={param.key}
-                param={param}
-                value={envelope[param.key] ?? param.default}
-                onChange={(value) => setEnvelopeParam(param.key, value)}
-                size={60}
-              />
-            ))}
-          </View>
-
-          <View style={styles.keyboardHeader}>
-            <Text style={styles.subheading}>Keyboard</Text>
-            <Text style={styles.noteReadout}>
-              {activeNote !== undefined ? noteName(activeNote) : '--'}
-            </Text>
-          </View>
-          {/* No onNoteOff: keys latch, so lifting a finger leaves the note
-              sounding until it or another key is tapped. */}
-          <Keyboard
-            fullRange
-            onNoteOn={noteOn}
-            activeNotes={activeNote !== undefined ? [activeNote] : []}
-          />
-        </>
-      ) : null}
-
-      <Text style={styles.subheading}>Add an effect</Text>
+      <Text style={styles.subheading}>Mode</Text>
       <View style={styles.chips}>
-        {QUICK_EFFECTS.map((type) => (
+        {MODES.map((entry) => (
           <Pressable
-            key={type}
-            onPress={() => addEffect(type)}
-            style={styles.chip}
+            key={entry.key}
+            onPress={() => setMode(entry.key)}
+            style={[styles.chip, mode === entry.key && styles.chipActive]}
           >
-            <Text style={styles.chipText}>
-              {getEffect(type)?.label ?? type}
+            <Text
+              style={[
+                styles.chipText,
+                mode === entry.key && styles.chipTextActive,
+              ]}
+            >
+              {entry.label}
             </Text>
           </Pressable>
         ))}
       </View>
+      <Text style={styles.hintLine}>
+        {MODES.find((entry) => entry.key === mode)?.hint}
+      </Text>
 
-      <EffectRack
-        effects={effects}
-        onRemove={async (effect) => {
-          await source?.removeEffect(effect);
-          setEffects((previous) => previous.filter((e) => e !== effect));
-        }}
-      />
+      <Text style={styles.subheading}>Unison</Text>
+      <View style={styles.chips}>
+        {[1, 2, 3, 5].map((count) => (
+          <Pressable
+            key={count}
+            onPress={() => setUnison(count)}
+            style={[styles.chip, unison === count && styles.chipActive]}
+          >
+            <Text
+              style={[
+                styles.chipText,
+                unison === count && styles.chipTextActive,
+              ]}
+            >
+              {count === 1 ? 'Off' : `${count}x`}
+            </Text>
+          </Pressable>
+        ))}
+        <Pressable
+          onPress={() => setLfoOn((on) => !on)}
+          style={[styles.chip, lfoOn && styles.chipActive]}
+        >
+          <Text style={[styles.chipText, lfoOn && styles.chipTextActive]}>
+            LFO
+          </Text>
+        </Pressable>
+      </View>
+
+      <Text style={styles.subheading}>Envelope</Text>
+      <View style={styles.adsrRow}>
+        {ENVELOPE_PARAMS.map((param) => (
+          <Knob
+            key={param.key}
+            param={param}
+            value={envelope[param.key] ?? param.default}
+            onChange={(value) => setEnvelopeParam(param.key, value)}
+            size={60}
+          />
+        ))}
+      </View>
+
+      {isPitched ? (
+        <>
+          <View style={styles.keyboardHeader}>
+            <Text style={styles.subheading}>Keyboard</Text>
+            <Text style={styles.noteReadout}>
+              {activeNotes.length > 0
+                ? activeNotes.map(noteName).join(' ')
+                : '--'}
+            </Text>
+          </View>
+          <Keyboard fullRange onNoteOn={noteOn} activeNotes={activeNotes} />
+        </>
+      ) : (
+        <Text style={styles.hintLine}>
+          Noise has no pitch, so the keyboard is hidden. Pick a pitched waveform
+          to play notes.
+        </Text>
+      )}
     </ScrollView>
   );
 }
@@ -384,6 +291,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: 6,
     marginBottom: 4,
+  },
+  hintLine: {
+    color: darkTheme.textMuted,
+    fontSize: 11.5,
+    fontFamily: darkTheme.fontFamily,
+    fontStyle: 'italic',
   },
   keyboardHeader: {
     flexDirection: 'row',

@@ -65,3 +65,27 @@ export function isBlackKey(midi: number): boolean {
 export function octaveStart(octave: number): number {
   return (octave + 1) * 12;
 }
+
+/** Shift a frequency by a number of cents. 100 cents is one semitone. */
+export function detune(hz: number, cents: number): number {
+  return hz * Math.pow(2, cents / 1200);
+}
+
+/**
+ * Detune offsets for a unison stack, in cents.
+ *
+ * Spread symmetrically about the centre, so the stack stays in tune with
+ * itself. An odd count keeps one voice exactly on pitch, which is what stops
+ * a unison patch sounding flat or sharp overall.
+ */
+export function unisonOffsets(voices: number, spreadCents: number): number[] {
+  if (voices <= 1) {
+    return [0];
+  }
+  const offsets: number[] = [];
+  const step = spreadCents / (voices - 1);
+  for (let i = 0; i < voices; i++) {
+    offsets.push(-spreadCents / 2 + step * i);
+  }
+  return offsets;
+}

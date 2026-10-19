@@ -15,6 +15,7 @@ import { Platform } from 'react-native';
 import {
   AudioEngine,
   EFFECTS,
+  PolySynth,
   GENERATORS,
   getCapabilities,
   getEffect,
@@ -48,6 +49,20 @@ function awaitSignal(sourceId: number, timeoutMs: number): Promise<number> {
       if (event.sourceId !== sourceId) {
         return;
       }
+      best = Math.max(best, event.rmsLeft, event.rmsRight);
+    });
+    setTimeout(() => {
+      unsubscribe();
+      resolve(best);
+    }, timeoutMs);
+  });
+}
+
+/** Highest level seen on any source, for checks that span a voice pool. */
+function awaitAnySignal(timeoutMs: number): Promise<number> {
+  return new Promise((resolve) => {
+    let best = 0;
+    const unsubscribe = AudioEngine.onLevels((event) => {
       best = Math.max(best, event.rmsLeft, event.rmsRight);
     });
     setTimeout(() => {
@@ -603,6 +618,100 @@ export async function runSelfCheck(): Promise<CheckResult[]> {
     results.push(
       log({
         name: 'envelope gates the generator',
+        ok: false,
+        detail: String(error),
+      })
+    );
+  }
+
+  // 9. Modes and unison ---------------------------------------------------
+  // Polyphony is a pool of generator sources, so a chord has to measure
+  // louder than a single note, and unison louder than a bare voice.
+  for (const mode of ['poly', 'mono', 'legato', 'portamento'] as const) {
+    let synth: PolySynth | undefined;
+    try {
+      synth = await PolySynth.create({
+        waveform: 'sawtooth',
+        mode,
+        maxVoices: 4,
+        amplitude: 0.2,
+      });
+      synth.setEnvelopeParam('attack', 5);
+      synth.setEnvelopeParam('sustain', 0.9);
+
+      synth.noteOn(60);
+      const single = await awaitAnySignal(900);
+
+      synth.noteOn(64);
+      synth.noteOn(67);
+      const chord = await awaitAnySignal(900);
+
+      synth.allNotesOff();
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      const released = await awaitAnySignal(500);
+
+      // Only poly stacks; the mono modes move the one voice instead.
+      const stacks = mode === 'poly';
+      const ok =
+        single > 0.01 &&
+        released < single * 0.5 &&
+        (stacks ? chord > single * 1.1 : chord > 0.01);
+
+      results.push(
+        log({
+          name: `mode ${mode}`,
+          ok,
+          detail:
+            `one=${single.toFixed(4)} three=${chord.toFixed(4)} ` +
+            `released=${released.toFixed(4)} voices=${synth.activeNotes.length}`,
+        })
+      );
+    } catch (error) {
+      results.push(
+        log({ name: `mode ${mode}`, ok: false, detail: String(error) })
+      );
+    } finally {
+      await synth?.dispose();
+    }
+  }
+
+  try {
+    const bare = await PolySynth.create({
+      waveform: 'sawtooth',
+      mode: 'poly',
+      maxVoices: 2,
+      unison: 1,
+      amplitude: 0.2,
+    });
+    bare.noteOn(60);
+    const one = await awaitAnySignal(800);
+    bare.allNotesOff();
+    await bare.dispose();
+
+    const stacked = await PolySynth.create({
+      waveform: 'sawtooth',
+      mode: 'poly',
+      maxVoices: 2,
+      unison: 3,
+      unisonSpread: 20,
+      amplitude: 0.2,
+    });
+    stacked.noteOn(60);
+    const three = await awaitAnySignal(800);
+    stacked.allNotesOff();
+    await stacked.dispose();
+
+    results.push(
+      log({
+        name: 'unison thickens the voice',
+        ok: one > 0.01 && three > one * 1.1,
+        detail: `1x=${one.toFixed(4)} 3x=${three.toFixed(4)}`,
+      })
+    );
+  } catch (error) {
+    results.push(
+      log({
+        name: 'unison thickens the voice',
         ok: false,
         detail: String(error),
       })

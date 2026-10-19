@@ -159,6 +159,62 @@ import { Keyboard } from 'react-native-audio-effects/ui';
 `midiToFrequency` takes a tuning reference, so `midiToFrequency(69, 432)`
 works if you need something other than A440.
 
+### Modes, chords and unison
+
+`PolySynth` turns the generators into a playable instrument. Polyphony is a
+pool of generator sources rather than a native voice pool — the engine
+already mixes any number of sources, so chords work today without touching
+Swift or Kotlin.
+
+```ts
+const synth = await PolySynth.create({
+  waveform: 'sawtooth',
+  mode: 'poly',       // 'poly' | 'mono' | 'legato' | 'portamento'
+  maxVoices: 8,
+  unison: 3,          // oscillators stacked per note
+  unisonSpread: 14,   // total detune across the stack, in cents
+  glideMs: 120,       // portamento glide time
+});
+
+synth.noteOn(60);     // C4
+synth.noteOn(64);     // stacks in poly; replaces the note in the mono modes
+synth.noteOff(60);
+synth.activeNotes;    // drive a Keyboard's highlight from this
+```
+
+| Mode | Behaviour |
+| --- | --- |
+| `poly` | Notes stack into chords. Re-pressing a sounding note releases it, so a touchscreen can build and unbuild a chord by tapping. Steals the oldest voice when the pool runs out. |
+| `mono` | One note at a time; every note re-attacks the envelope. |
+| `legato` | One note at a time; pitch changes but the envelope keeps running, so a phrase played without gaps swells once. |
+| `portamento` | Legato, with the pitch gliding. Interpolated in log space, because a glide that is linear in hertz sounds like it rushes the top of the interval. |
+
+> **`poly` and `unison` are not working yet on iOS.** They allocate several
+> sources at once, and that runs into the same unresolved graph-mutation bug
+> that affects effect chains — measured silent, where `mono`, `legato` and
+> `portamento` all measure 0.117 RMS. Tracked with the chain bug; both are
+> almost certainly the same root cause.
+
+### LFO
+
+Several effects have their own internal LFO, but each is wired to one fixed
+destination. `LFO` drives *any* parameter.
+
+```ts
+const lfo = new LFO({ rate: 0.8, shape: 'sine', depth: 0.9 });
+lfo.addParam(filter, 'cutoff', { min: 180, max: 9000 });
+lfo.start();
+```
+
+Bounds default to the parameter's own range from the schema, so
+`lfo.addParam(filter, 'cutoff')` sweeps the whole filter. Shapes are sine,
+triangle, square, sawtooth and random (sample-and-hold).
+
+It runs on a timer rather than in the DSP: parameter writes are synchronous
+JSI calls, so 60 Hz costs nothing, and an LFO moves slowly by definition. It
+is not a substitute for audio-rate modulation — that is why chorus and
+phaser keep their internal oscillators.
+
 ### Envelopes
 
 A raw oscillator is a continuous tone; an ADSR envelope is what turns it into

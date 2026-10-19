@@ -50,10 +50,18 @@ enum FileImporter {
     if let url = URL(string: uri), url.scheme != nil {
       return url
     }
-    // Last resort: a resource inside the app bundle.
-    let name = (uri as NSString).deletingPathExtension
-    let ext = (uri as NSString).pathExtension
-    return Bundle.main.url(forResource: name, withExtension: ext.isEmpty ? nil : ext)
+    // Last resort: a resource inside the app bundle. Handles both a bare
+    // name ("beat.aiff") and one inside a bundled folder reference
+    // ("Samples/beat.aiff"), which is how apps usually ship audio.
+    let path = uri as NSString
+    let ext = path.pathExtension
+    let directory = path.deletingLastPathComponent
+    let name = (path.lastPathComponent as NSString).deletingPathExtension
+    return Bundle.main.url(
+      forResource: name,
+      withExtension: ext.isEmpty ? nil : ext,
+      subdirectory: directory.isEmpty ? nil : directory
+    )
   }
 
   static func `import`(uri: String) throws -> ImportedFile {

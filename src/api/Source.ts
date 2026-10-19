@@ -3,7 +3,12 @@
  */
 
 import NativeAudioEffects from '../NativeAudioEffects';
-import type { EffectType, Waveform } from '../schema';
+import {
+  getGenerator,
+  quantize,
+  type EffectType,
+  type Waveform,
+} from '../schema';
 import { Effect } from './Effect';
 import { rethrowNativeError } from './errors';
 
@@ -74,6 +79,36 @@ export class Source {
     NativeAudioEffects.setSourceVolume(
       this.id,
       Math.min(1, Math.max(0, volume))
+    );
+  }
+
+  /**
+   * Change a generator's `frequency` (Hz) or `amplitude` (0..1) while it runs.
+   *
+   * A generator is a source rather than a link in the chain, so it has no
+   * effect handle and its parameters are set here. Clamped and snapped
+   * against the generator's schema entry, like effect parameters.
+   */
+  setOscillatorParam(key: 'frequency' | 'amplitude', value: number): void {
+    this.assertLive();
+    if (this.kind !== 'generator' || !this.waveform) {
+      if (__DEV__) {
+        console.warn(
+          '[audio-effects] setOscillatorParam() only applies to generators.'
+        );
+      }
+      return;
+    }
+    const param = getGenerator(this.waveform)?.params.find(
+      (candidate) => candidate.key === key
+    );
+    if (!param) {
+      return;
+    }
+    NativeAudioEffects.setOscillatorParameter(
+      this.id,
+      key,
+      quantize(param, value)
     );
   }
 

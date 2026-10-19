@@ -2,7 +2,8 @@
   "compilerOptions": {
     "rootDir": ".",
     "paths": {
-      "react-native-audio-effects": ["./src/index"]
+      "react-native-audio-effects": ["./src/index"],
+      "react-native-audio-effects/ui": ["./src/ui/index"]
     },
     "allowUnreachableCode": false,
     "allowUnusedLabels": false,

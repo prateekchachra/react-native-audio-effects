@@ -151,6 +151,15 @@ export interface Spec extends TurboModule {
   /** Set source level as linear amplitude, 0..1. Synchronous. */
   setSourceVolume(sourceId: number, volume: number): void;
 
+  /**
+   * Set a generator parameter — `frequency` or `amplitude` — while it runs.
+   *
+   * Separate from `setParameter`, which addresses effects: a generator is a
+   * source, not a link in the chain, so it has no effect handle. Synchronous
+   * for the same reason effect writes are: this is what a pitch knob drives.
+   */
+  setOscillatorParameter(sourceId: number, key: string, value: number): void;
+
   // --------------------------------------------------------------- effects
 
   /**

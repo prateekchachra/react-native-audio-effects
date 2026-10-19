@@ -2268,6 +2268,16 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@react-native-documents/picker@npm:^12.0.3":
+  version: 12.0.3
+  resolution: "@react-native-documents/picker@npm:12.0.3"
+  peerDependencies:
+    react: "*"
+    react-native: ">=0.79.0"
+  checksum: 10c0/e166fe4d40232c7dcfbab40445cd116e563a0ac838b5d0462904cbf0e507f14042e204f4a219a65758b28b3e013e01b50c08a2ecd45e689ebd17bc1ef73f017c
+  languageName: node
+  linkType: hard
+
 "@react-native/asset-utils@npm:0.88.0":
   version: 0.88.0
   resolution: "@react-native/asset-utils@npm:0.88.0"
@@ -7777,6 +7787,7 @@ __metadata:
     "@react-native-community/cli": "npm:20.2.0"
     "@react-native-community/cli-platform-android": "npm:20.2.0"
     "@react-native-community/cli-platform-ios": "npm:20.2.0"
+    "@react-native-documents/picker": "npm:^12.0.3"
     "@react-native/babel-preset": "npm:0.88.0"
     "@react-native/jest-preset": "npm:0.88.0"
     "@react-native/metro-config": "npm:0.88.0"
@@ -7785,7 +7796,11 @@ __metadata:
     react: "npm:19.3.0"
     react-native: "npm:0.88.0"
     react-native-builder-bob: "npm:^0.43.2"
+    react-native-gesture-handler: "npm:^3.4.0"
     react-native-monorepo-config: "npm:^0.4.0"
+    react-native-reanimated: "npm:^4.7.1"
+    react-native-svg: "npm:^15.16.0"
+    react-native-worklets: "npm:^0.13.0"
   languageName: unknown
   linkType: soft
 

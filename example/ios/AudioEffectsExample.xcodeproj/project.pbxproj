@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		5053E9ABFD86A6F0D5D66F22 /* Pods_AudioEffectsExample.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 70091BD2EAD99A93CB992F0B /* Pods_AudioEffectsExample.framework */; };
+		7340BDF977D46C7A9FB1922E /* Samples in Resources */ = {isa = PBXBuildFile; fileRef = 4F00E202F0A3CD887B6491EF /* Samples */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		761780EF2CA45674006654EF /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EE2CA45674006654EF /* SceneDelegate.swift */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
@@ -21,6 +22,7 @@
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = AudioEffectsExample/Info.plist; sourceTree = "<group>"; };
 		13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = PrivacyInfo.xcprivacy; path = AudioEffectsExample/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		3B4392A12AC88292D35C810B /* Pods-AudioEffectsExample.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-AudioEffectsExample.debug.xcconfig"; path = "Target Support Files/Pods-AudioEffectsExample/Pods-AudioEffectsExample.debug.xcconfig"; sourceTree = "<group>"; };
+		4F00E202F0A3CD887B6491EF /* Samples */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder; path = Samples; sourceTree = "<group>"; };
 		5709B34CF0A7D63546082F79 /* Pods-AudioEffectsExample.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-AudioEffectsExample.release.xcconfig"; path = "Target Support Files/Pods-AudioEffectsExample/Pods-AudioEffectsExample.release.xcconfig"; sourceTree = "<group>"; };
 		70091BD2EAD99A93CB992F0B /* Pods_AudioEffectsExample.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_AudioEffectsExample.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = AudioEffectsExample/AppDelegate.swift; sourceTree = "<group>"; };
@@ -78,6 +80,7 @@
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
 				BBD78D7AC51CEA395F1C20DB /* Pods */,
+				4F00E202F0A3CD887B6491EF /* Samples */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -164,6 +167,7 @@
 				81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				87CC0FA23E279B07CC2122C5 /* PrivacyInfo.xcprivacy in Resources */,
+				7340BDF977D46C7A9FB1922E /* Samples in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

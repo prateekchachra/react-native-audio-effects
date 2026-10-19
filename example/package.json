@@ -10,8 +10,13 @@
     "build:ios": "react-native build-ios --mode Debug"
   },
   "dependencies": {
+    "@react-native-documents/picker": "^12.0.3",
     "react": "19.3.0",
-    "react-native": "0.88.0"
+    "react-native": "0.88.0",
+    "react-native-gesture-handler": "^3.4.0",
+    "react-native-reanimated": "^4.7.1",
+    "react-native-svg": "^15.16.0",
+    "react-native-worklets": "^0.13.0"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

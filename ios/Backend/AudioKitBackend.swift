@@ -204,6 +204,18 @@ final class AudioKitBackend {
     }
   }
 
+  /// Live pitch and level for a generator source.
+  func setOscillatorParameter(_ sourceId: Int, key: String, value: Float) {
+    queue.sync {
+      guard let generator = sources[sourceId]?.generator else { return }
+      switch key {
+      case "frequency": generator.setFrequency(value)
+      case "amplitude": generator.setAmplitude(value)
+      default: break
+      }
+    }
+  }
+
   // MARK: - Effects
 
   func createEffect(sourceId: Int, type: String) throws -> Int {

@@ -8,11 +8,13 @@ require Pod::Executable.execute_command('node', ['-p',
 platform :ios, min_ios_version_supported
 prepare_react_native_project!
 
-linkage = ENV['USE_FRAMEWORKS']
-if linkage != nil
-  Pod::UI.puts "Configuring Pod with #{linkage}ally linked Frameworks".green
-  use_frameworks! :linkage => linkage.to_sym
-end
+# AudioKit reaches this project through `spm_dependency` in AudioEffects.podspec
+# (it is Swift Package Manager only — see the podspec for why). Swift packages
+# linked into statically linked pods fail at link time, so dynamic frameworks
+# are the default here rather than an opt-in.
+linkage = (ENV['USE_FRAMEWORKS'] || 'dynamic').to_sym
+Pod::UI.puts "Configuring Pod with #{linkage}ally linked Frameworks".green
+use_frameworks! :linkage => linkage
 
 target 'AudioEffectsExample' do
   config = use_native_modules!

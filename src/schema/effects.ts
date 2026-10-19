@@ -428,11 +428,15 @@ export const NOISE_GATE: EffectDescriptor = {
     {
       key: 'threshold',
       label: 'Threshold',
-      min: -80,
+      min: -40,
       max: 0,
-      default: -40,
+      default: -24,
       unit: 'dB',
       taper: 'linear',
+      description:
+        'Floored at -40 dB because that is the lower bound of the AudioKit ' +
+        'dynamics processor. Klarinet reaches -80 dB, but the shared range ' +
+        'is what both platforms can honour without silently clamping.',
     },
     {
       key: 'attack',
@@ -461,15 +465,17 @@ export const NOISE_GATE: EffectDescriptor = {
       default: 50,
       unit: 'ms',
       taper: 'linear',
+      platforms: ANDROID_ONLY,
+      description:
+        'How long the gate stays open after the signal falls below the ' +
+        'threshold. Klarinet only — AudioKit’s dynamics processor has no ' +
+        'hold stage.',
     },
   ],
 };
 
 /** Band count for {@link PARAMETRIC_EQ}. Mirrored by both native adapters. */
 export const EQ_BAND_COUNT = 4;
-
-/** Filter shapes for an EQ band, matching Klarinet's `BAND_TYPE` encoding. */
-export const EQ_BAND_TYPES = ['peaking', 'lowShelf', 'highShelf'] as const;
 
 const EQ_DEFAULT_FREQUENCIES = [100, 500, 2000, 8000];
 
@@ -480,6 +486,11 @@ const EQ_DEFAULT_FREQUENCIES = [100, 500, 2000, 8000];
  * addresses parameters by a single string. Klarinet addresses the same values
  * as `bandIndex * PARAMS_PER_BAND + offset`, which the Kotlin adapter derives
  * from the index parsed out of the key.
+ *
+ * Every band is a peaking filter. Klarinet's EQ also offers low- and
+ * high-shelf shapes, but Apple's parametric EQ audio unit is peaking-only and
+ * swapping shapes would mean rebuilding the node graph mid-stream. Shelving
+ * bands are left for a later version rather than shipped as Android-only.
  */
 function buildEqParams(): ParamDescriptor[] {
   const params: ParamDescriptor[] = [];
@@ -497,8 +508,9 @@ function buildEqParams(): ParamDescriptor[] {
       {
         key: `band${band}Gain`,
         label: `B${band + 1} Gain`,
-        min: -24,
-        max: 24,
+        // +/-20 dB is Apple's parametric EQ limit; Klarinet reaches +/-24.
+        min: -20,
+        max: 20,
         default: 0,
         unit: 'dB',
         taper: 'linear',
@@ -512,18 +524,6 @@ function buildEqParams(): ParamDescriptor[] {
         unit: '',
         taper: 'log',
         precision: 2,
-      },
-      {
-        key: `band${band}Type`,
-        label: `B${band + 1} Type`,
-        min: 0,
-        max: EQ_BAND_TYPES.length - 1,
-        default: 0,
-        unit: '',
-        taper: 'stepped',
-        steps: EQ_BAND_TYPES.map((_, index) => index),
-        precision: 0,
-        description: EQ_BAND_TYPES.join(' / '),
       }
     );
   }

@@ -5,7 +5,7 @@ buildscript {
         compileSdkVersion = 37
         targetSdkVersion = 36
         ndkVersion = "27.1.12297006"
-        kotlinVersion = "2.2.0"
+        kotlinVersion = "2.4.20"
     }
     repositories {
         google()
@@ -15,6 +15,21 @@ buildscript {
         classpath("com.android.tools.build:gradle")
         classpath("com.facebook.react:react-native-gradle-plugin")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin")
+    }
+
+    // React Native 0.88's Gradle plugin pins Kotlin 2.2.0, but Klarinet --
+    // the Android DSP backend -- publishes Kotlin 2.4 metadata, which a 2.2
+    // compiler refuses to read. A newer compiler reads older metadata
+    // happily, so the whole build moves up to 2.4 instead.
+    //
+    // Apps consuming react-native-audio-effects need this same override
+    // until React Native ships Kotlin 2.4. See the README.
+    configurations.classpath {
+        resolutionStrategy.eachDependency { details ->
+            if (details.requested.group == "org.jetbrains.kotlin") {
+                details.useVersion(kotlinVersion)
+            }
+        }
     }
 }
 

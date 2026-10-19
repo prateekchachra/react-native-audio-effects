@@ -285,7 +285,7 @@ internal class KlarinetBackend(private val context: Context) : AudioBackend {
     id
   }
 
-  override fun releaseSource(sourceId: Int) = synchronized(lock) {
+  override fun releaseSource(sourceId: Int): Unit = synchronized(lock) {
     val entry = sources.remove(sourceId)
       ?: throw AudioEffectsException.SourceNotFound(sourceId)
     entry.slots.forEach { effectOwner.remove(it.id) }
@@ -327,7 +327,7 @@ internal class KlarinetBackend(private val context: Context) : AudioBackend {
     Unit
   }
 
-  override fun seek(sourceId: Int, positionSec: Double) = synchronized(lock) {
+  override fun seek(sourceId: Int, positionSec: Double): Unit = synchronized(lock) {
     val entry = require(sourceId)
     val callback = entry.playback ?: return
     val clamped = positionSec.coerceIn(0.0, entry.durationSec)
@@ -373,7 +373,7 @@ internal class KlarinetBackend(private val context: Context) : AudioBackend {
     id
   }
 
-  override fun removeEffect(effectId: Int) = synchronized(lock) {
+  override fun removeEffect(effectId: Int): Unit = synchronized(lock) {
     val sourceId = effectOwner[effectId]
       ?: throw AudioEffectsException.EffectNotFound(effectId)
     val entry = require(sourceId)
@@ -384,9 +384,10 @@ internal class KlarinetBackend(private val context: Context) : AudioBackend {
     slot.effect.release()
     entry.slots.remove(slot)
     effectOwner.remove(effectId)
+    Unit
   }
 
-  override fun reorderChain(sourceId: Int, effectIds: List<Int>) = synchronized(lock) {
+  override fun reorderChain(sourceId: Int, effectIds: List<Int>): Unit = synchronized(lock) {
     val entry = require(sourceId)
     if (effectIds.size != entry.slots.size ||
       effectIds.toSet() != entry.slots.map { it.id }.toSet()
@@ -404,6 +405,7 @@ internal class KlarinetBackend(private val context: Context) : AudioBackend {
     reordered.forEach { entry.chain.add(it.effect) }
     entry.slots.clear()
     entry.slots.addAll(reordered)
+    Unit
   }
 
   override fun setEffectEnabled(effectId: Int, enabled: Boolean) {

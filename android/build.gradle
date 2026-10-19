@@ -1,6 +1,6 @@
 buildscript {
   ext.AudioEffects = [
-    kotlinVersion: "2.0.21",
+    kotlinVersion: "2.4.20",
     // Klarinet's floor. It also ships only arm64-v8a, armeabi-v7a and
     // x86_64 -- there is no x86 slice, so very old emulator images will not
     // run this.

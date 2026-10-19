@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -14,6 +14,7 @@ import { ThemeProvider, darkTheme } from 'react-native-audio-effects/ui';
 
 import { GeneratorsScreen } from './screens/GeneratorsScreen';
 import { StudioScreen } from './screens/StudioScreen';
+import { runSelfCheck } from './selfCheck';
 
 const TABS = [
   { key: 'studio', label: 'Studio' },
@@ -22,11 +23,26 @@ const TABS = [
 
 type TabKey = (typeof TABS)[number]['key'];
 
+/**
+ * Flip to run the end-to-end diagnostics on launch and print them to the
+ * device log. See src/selfCheck.ts — this is how the iOS implementation is
+ * verified, since unit tests cannot tell you whether audio is really flowing.
+ */
+const RUN_SELF_CHECK_ON_LAUNCH = false;
+
 export default function App() {
   const [tab, setTab] = useState<TabKey>('studio');
   // Mounted once at the root: the engine owns the audio device, so starting
   // it per screen would fight over the session.
   const { isReady, error } = useAudioEngine();
+
+  useEffect(() => {
+    if (isReady && RUN_SELF_CHECK_ON_LAUNCH) {
+      runSelfCheck().catch((caught) =>
+        console.log('[selfcheck] threw:', caught)
+      );
+    }
+  }, [isReady]);
 
   return (
     <GestureHandlerRootView style={styles.root}>

@@ -2,6 +2,7 @@ import AudioKit
 import AudioKitEX
 import AVFoundation
 import Foundation
+import SoundpipeAudioKit
 
 /**
  The iOS audio backend.
@@ -23,12 +24,27 @@ final class AudioKitBackend {
   private let rootMixer = Mixer()
   private let queue = DispatchQueue(label: "com.audioeffects.backend")
 
+  /**
+   A permanently attached silent oscillator.
+
+   If the root mixer ever drops to zero inputs, AudioKit's render chain
+   collapses and inputs added afterwards produce no output — so releasing the
+   last source would silently break every source created after it. Keeping one
+   node attached for the engine's lifetime keeps the chain intact. It renders
+   exact zeros at amplitude 0, so the cost is one oscillator's worth of CPU
+   and nothing audible.
+   */
+  private let keepAlive = Oscillator(waveform: Table(.sine), amplitude: 0)
+
   private var sources: [Int: SourceGraph] = [:]
   private var slotOwner: [Int: Int] = [:]  // effectId -> sourceId
   private var nextId = 1
   private var configured = false
 
   private var meteringTimer: DispatchSourceTimer?
+  /// Remembered so sources created later are metered too — otherwise a
+  /// source added after `setMeteringEnabled(true)` silently reports nothing.
+  private var meteringEnabled = false
 
   /// Emitted at the metering interval for every source with metering on.
   var onLevels: ((Int, Float, Float, Float, Float) -> Void)?
@@ -62,6 +78,10 @@ final class AudioKitBackend {
       }
       try session.setActive(true)
 
+      if !rootMixer.hasInput(keepAlive) {
+        rootMixer.addInput(keepAlive)
+        keepAlive.start()
+      }
       engine.output = rootMixer
       configured = true
     }
@@ -85,12 +105,14 @@ final class AudioKitBackend {
   func teardown() {
     queue.sync {
       stopMeteringTimer()
+      meteringEnabled = false
       for source in sources.values {
         source.teardown()
       }
       sources.removeAll()
       slotOwner.removeAll()
       rootMixer.removeAllInputs()
+      keepAlive.stop()
       engine.stop()
       try? AVAudioSession.sharedInstance().setActive(false)
       configured = false
@@ -171,6 +193,9 @@ final class AudioKitBackend {
       } else {
         graph.generator?.play()
       }
+      // Tapped here rather than at creation: the chain is settled by now, and
+      // installing a tap before it is leaves the player silent.
+      if meteringEnabled { graph.startMetering() }
     }
   }
 
@@ -308,11 +333,17 @@ final class AudioKitBackend {
   func setMeteringEnabled(_ enabled: Bool, intervalMs: Double) {
     queue.sync {
       stopMeteringTimer()
+      meteringEnabled = enabled
       guard enabled else {
         for source in sources.values { source.stopMetering() }
         return
       }
-      for source in sources.values { source.startMetering() }
+      // Only sources already playing are tapped now; the rest are tapped
+      // when they start. Tapping an idle source measures nothing anyway, and
+      // tapping one whose chain is still being assembled silences it.
+      for source in sources.values where source.isPlaying {
+        source.startMetering()
+      }
 
       // Coalesced on a timer rather than emitted per audio buffer: at a 256
       // frame buffer that would be ~190 events a second per source, which

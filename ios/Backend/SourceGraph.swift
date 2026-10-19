@@ -129,6 +129,15 @@ final class SourceGraph {
 
   /// Recreate every effect node in order and reconnect the chain.
   private func rebuild() {
+    // A tap attached to `output` does not survive its inputs being swapped —
+    // the graph keeps rendering silence afterwards. Detach around the rebuild
+    // and restore it, so enabling metering before building a chain behaves
+    // the same as enabling it after.
+    let wasMetering = amplitudeTap != nil
+    if wasMetering {
+      stopMetering()
+    }
+
     var current: Node = head
     for slot in slots {
       guard let node = EffectFactory.make(type: slot.type, input: current) else {
@@ -141,6 +150,10 @@ final class SourceGraph {
 
     output.removeAllInputs()
     output.addInput(current)
+
+    if wasMetering {
+      startMetering()
+    }
   }
 
   // MARK: - Metering

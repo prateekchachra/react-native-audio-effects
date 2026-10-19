@@ -251,12 +251,34 @@ final class AudioKitBackend {
     }
   }
 
-  /// Note on / note off for a generator's envelope.
+  /**
+   Note on / note off for a generator's envelope.
+
+   A note-on while the gate is already open has to retrigger the attack, not
+   be ignored. The envelope audio unit samples its gate once per render
+   block, so closing and reopening within the same block is invisible to it
+   — the close has to be given a block to land before the reopen. One block
+   at a typical buffer size is around six milliseconds, well under the
+   threshold where a key press feels delayed.
+   */
   func gate(_ sourceId: Int, on: Bool) {
     queue.sync {
-      sources[sourceId]?.gate(on)
+      guard let graph = sources[sourceId] else { return }
+
+      guard on, graph.isGateOpen else {
+        graph.setGate(on)
+        return
+      }
+
+      graph.setGate(false)
+      queue.asyncAfter(deadline: .now() + Self.retriggerGap) { [weak graph] in
+        graph?.setGate(true)
+      }
     }
   }
+
+  /// Gap between closing and reopening the gate on a retrigger.
+  private static let retriggerGap = 0.012
 
   // MARK: - Effects
 

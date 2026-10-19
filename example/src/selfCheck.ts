@@ -23,6 +23,8 @@ import {
   type Waveform,
 } from 'react-native-audio-effects';
 
+import { BUNDLED_SAMPLES } from './samples';
+
 const SAMPLE = 'Samples/beat.aiff';
 
 export interface CheckResult {
@@ -361,6 +363,28 @@ export async function runSelfCheck(): Promise<CheckResult[]> {
     } catch (error) {
       results.push(
         log({ name: `generator ${waveform}`, ok: false, detail: String(error) })
+      );
+    }
+  }
+
+  // 7b. Every bundled sample decodes ------------------------------------
+  // aiff, wav and mp3 take different paths through the decoder, so loading
+  // one of each is the cheapest way to catch a format regression.
+  for (const entry of BUNDLED_SAMPLES) {
+    try {
+      const loaded = await AudioEngine.loadFile(entry.path);
+      const ok = loaded.info.durationSec > 0 && loaded.info.sampleRate > 0;
+      await loaded.release();
+      results.push(
+        log({
+          name: `sample ${entry.label}`,
+          ok,
+          detail: `${loaded.info.durationSec.toFixed(2)}s @ ${loaded.info.sampleRate}Hz`,
+        })
+      );
+    } catch (error) {
+      results.push(
+        log({ name: `sample ${entry.label}`, ok: false, detail: String(error) })
       );
     }
   }

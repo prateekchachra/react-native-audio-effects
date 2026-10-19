@@ -222,6 +222,108 @@ Generators differ in implementation: iOS uses AudioKit's band-limited
 wavetables, Android synthesises with PolyBLEP in the stream callback. They are
 perceptually equivalent but not sample-identical at high fundamentals.
 
+## API reference
+
+### `AudioEngine`
+
+A singleton — there is one audio device, so it is not instantiated.
+
+| Member | Description |
+| --- | --- |
+| `configure(options?)` | Prepare the engine and audio session. `{ sampleRate?, bufferFrames?, category? }`. Safe to call again. |
+| `start()` | Start the output stream. |
+| `stop()` | Stop output; sources and effects stay allocated. |
+| `teardown()` | Release everything. Must be reconfigured before reuse. |
+| `loadFile(uri)` | Decode a file into a `Source`. Accepts `file://`, `content://`, an absolute path, or a bundled asset path. |
+| `createOscillator(waveform, config?)` | Create a generator `Source`. `{ frequency?, amplitude?, antialias? }`. |
+| `setMetering(enabled, intervalMs?)` | Turn level and progress events on or off. Defaults to 33 ms. |
+| `onLevels(listener)` | Subscribe to `{ sourceId, peakLeft, peakRight, rmsLeft, rmsRight }`. Returns an unsubscribe. |
+| `onProgress(listener)` | Subscribe to `{ sourceId, positionSec, durationSec, isPlaying }`. |
+| `onError(listener)` | Audio-thread errors, outside any pending promise. |
+| `capabilities` | What this platform's backend implements. |
+| `isStarted` | Whether the output stream is running. |
+
+### `Source`
+
+| Member | Description |
+| --- | --- |
+| `id`, `kind`, `waveform` | Native handle, `'file'` or `'generator'`, and the waveform for generators. |
+| `info` | `{ durationSec, sampleRate, channelCount, peaks }`. `peaks` is interleaved min/max pairs for drawing. |
+| `play({ loop? })` / `pause()` / `stop()` | Transport. |
+| `seek(positionSec)` | File sources only. |
+| `setVolume(amplitude)` | Linear 0..1. Synchronous. |
+| `setOscillatorParam(key, value)` | `'frequency'` (Hz) or `'amplitude'` (0..1). Generators only. |
+| `setEnvelopeParam(key, value)` | `'attack'`, `'decay'`, `'release'` in ms; `'sustain'` as 0..1. Generators only. |
+| `gate(on)` | Note on / note off. A second note-on retriggers the attack. |
+| `addEffect(type)` | Append to the chain. Rejects with `EffectUnavailableError` if unsupported. |
+| `removeEffect(effect)` / `clearEffects()` | Remove one or all. |
+| `reorder(effects)` | Reorder the chain; order changes the sound. |
+| `effects` | The chain in signal order. |
+| `release()` | Free the source and its chain. |
+
+### `Effect`
+
+| Member | Description |
+| --- | --- |
+| `id`, `type`, `descriptor` | Handle, schema type, and the full `EffectDescriptor`. |
+| `params` | The parameters this effect exposes, in display order. |
+| `set(key, value)` | Write one parameter. Clamped and snapped to the schema. Synchronous. |
+| `setMany(values)` | Write several atomically, within one audio cycle. |
+| `get(key)` | Last value written, or the schema default. |
+| `getValues()` | Every value, suitable for storing as a preset. |
+| `reset()` | Restore schema defaults. |
+| `enabled` | Bypass without removing from the chain. |
+
+### Capabilities
+
+`getCapabilities()`, `isEffectAvailable(type)`, `isParamAvailable(type, key)`,
+`isGeneratorAvailable(waveform)`.
+
+### Schema
+
+`EFFECTS`, `GENERATORS`, `ENVELOPE_PARAMS`, `EQ_BAND_COUNT`, and the
+individual descriptors (`DELAY`, `REVERB`, `COMPRESSOR`, …).
+
+Lookups: `getEffect(type)`, `getParam(type, key)`, `getGenerator(waveform)`,
+`defaultsFor(type)`, `generatorDefaults(waveform)`, `envelopeDefaults()`,
+`effectsForPlatform(platform)`, `isEffectSupported`, `isParamSupported`.
+
+Value maths: `toNormalized`, `fromNormalized`, `quantize`, `nudge`, `clamp`.
+Formatting: `formatValue`, `formatNumber`, `unitLabel`.
+Pitch: `midiToFrequency`, `frequencyToMidi`, `noteName`, `isBlackKey`,
+`octaveStart`.
+
+### Hooks
+
+`useAudioEngine(options?)`, `useSource(uri)`, `useOscillator(waveform, config?)`,
+`useLevels(source, intervalMs?)`, `useProgress(source)`,
+`useEffectParam(effect, key)`, `useEffectChain(source, types)`,
+`useAudioErrors(listener)`.
+
+### Errors
+
+`AudioEffectsError` with a `code`, plus `EffectUnavailableError` and
+`AudioFileError`. Codes: `NOT_CONFIGURED`, `SOURCE_NOT_FOUND`,
+`EFFECT_NOT_FOUND`, `EFFECT_UNAVAILABLE`, `UNKNOWN_EFFECT`,
+`UNKNOWN_WAVEFORM`, `FILE_NOT_FOUND`, `DECODE_FAILED`,
+`INVALID_CHAIN_ORDER`, `ENGINE_FAILED`.
+
+### Components — `react-native-audio-effects/ui`
+
+| Component | Description |
+| --- | --- |
+| `<EffectRack>` | A whole chain, one panel per effect, generated from the schema. |
+| `<EffectPanel>` | One effect's controls. `layout` is `'knobs'` or `'sliders'`. |
+| `<Knob>` | Rotary control. Vertical drag, fine mode on horizontal travel, double-tap to reset. |
+| `<EffectSlider>` | Taper-aware horizontal slider. |
+| `<XYPad>` | Two parameters at once, written as one atomic batch. |
+| `<LevelMeter>` | Peak and RMS on a decibel scale, with peak hold. |
+| `<WaveformView>` | Waveform, playhead and scrub-to-seek. |
+| `<Keyboard>` | MIDI keyboard. Latches by default; pass `onNoteOff` to hold. |
+| `<PresetBar>` | Preset chips with A/B compare. |
+| `ThemeProvider`, `darkTheme`, `lightTheme`, `useAudioTheme` | Theming. |
+| `neuroRaised`, `neuroInner`, `neuroInset`, `labelStyle`, `readoutStyle` | Style helpers for building matching controls. |
+
 ## Theming
 
 The kit ships a violet-on-near-black theme and a light variant, both with

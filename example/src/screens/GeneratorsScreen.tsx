@@ -53,6 +53,14 @@ export function GeneratorsScreen() {
   const [amplitude, setAmplitude] = useState(0.3);
   /** The latched note, or undefined when nothing is sounding. */
   const [activeNote, setActiveNote] = useState<number>();
+  /**
+   * Mirrors `activeNote` for the key handler.
+   *
+   * Two taps in quick succession can both run against the same render, so
+   * reading the state variable would make the second tap see a stale value
+   * and fail to toggle the note off.
+   */
+  const activeNoteRef = useRef<number | undefined>(undefined);
   /** The stream runs continuously once started; notes are gated on top. */
   const streamStarted = useRef(false);
   const [envelope, setEnvelope] =
@@ -92,6 +100,7 @@ export function GeneratorsScreen() {
       setEffects([]);
       setIsPlaying(false);
       setActiveNote(undefined);
+      activeNoteRef.current = undefined;
       streamStarted.current = false;
     })();
 
@@ -111,6 +120,7 @@ export function GeneratorsScreen() {
     if (isPlaying) {
       await source.stop();
       streamStarted.current = false;
+      activeNoteRef.current = undefined;
       setActiveNote(undefined);
       setIsPlaying(false);
     } else {
@@ -139,9 +149,10 @@ export function GeneratorsScreen() {
         return;
       }
 
-      // Same key again: stop.
-      if (activeNote === midi) {
+      // Same key again: stop and let it ring out.
+      if (activeNoteRef.current === midi) {
         source.gate(false);
+        activeNoteRef.current = undefined;
         setActiveNote(undefined);
         setIsPlaying(false);
         return;
@@ -156,18 +167,16 @@ export function GeneratorsScreen() {
         streamStarted.current = true;
       }
 
-      // Close before opening so a new key restarts the attack rather than
-      // sliding to the new pitch — closing alone would be a release, and
-      // opening alone is a no-op on an already-open envelope.
-      if (activeNote !== undefined) {
-        source.gate(false);
-      }
+      // A second note-on retriggers the envelope natively — the backend
+      // knows the gate is already open and gives the close a render block
+      // to land before reopening.
       source.gate(true);
 
+      activeNoteRef.current = midi;
       setActiveNote(midi);
       setIsPlaying(true);
     },
-    [source, activeNote]
+    [source]
   );
 
   const setEnvelopeParam = useCallback(

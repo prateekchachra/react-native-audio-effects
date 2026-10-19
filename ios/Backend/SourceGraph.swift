@@ -89,6 +89,10 @@ final class SourceGraph {
    */
   private var envelopeEngaged = false
 
+  /// Whether the gate is currently open, so a second note-on can be told
+  /// apart from the first and retriggered.
+  private(set) var isGateOpen = false
+
   private(set) var slots: [EffectSlot] = []
   private var amplitudeTap: AmplitudeTap?
 
@@ -131,10 +135,11 @@ final class SourceGraph {
     }
   }
 
-  /// Note on / note off.
-  func gate(_ on: Bool) {
+  /// Open or close the gate directly, without retrigger handling.
+  func setGate(_ on: Bool) {
     guard let envelope else { return }
     envelopeEngaged = true
+    isGateOpen = on
     on ? envelope.openGate() : envelope.closeGate()
   }
 
@@ -143,12 +148,14 @@ final class SourceGraph {
   func openGateIfUngated() {
     guard let envelope, !envelopeEngaged else { return }
     envelope.openGate()
+    isGateOpen = true
   }
 
   /// Close the envelope when the transport stops, so a later play starts clean.
   func closeGateForTransport() {
     guard let envelope, !envelopeEngaged else { return }
     envelope.closeGate()
+    isGateOpen = false
   }
 
   // MARK: - Chain structure

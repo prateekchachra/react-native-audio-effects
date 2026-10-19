@@ -84,7 +84,15 @@ export function EffectPanel({
     isParamAvailable(effect.type, param.key);
 
   return (
-    <View style={[styles.panel, neuroRaised(theme)]}>
+    <View
+      style={[
+        styles.panel,
+        neuroRaised(theme),
+        // A hairline rim stops the card dissolving into the page on
+        // displays where the shadow is barely visible.
+        { borderWidth: 1, borderColor: theme.track },
+      ]}
+    >
       {showHeader ? (
         <View style={styles.header}>
           <View style={styles.headerText}>
@@ -106,8 +114,21 @@ export function EffectPanel({
                 accessibilityRole="button"
                 accessibilityLabel={`Remove ${effect.descriptor.label}`}
                 hitSlop={8}
+                style={({ pressed }) => [
+                  styles.removeButton,
+                  {
+                    backgroundColor: theme.surface,
+                    borderColor: theme.track,
+                  },
+                  pressed && { backgroundColor: theme.meterHigh },
+                ]}
               >
-                <Text style={[styles.remove, { color: theme.textMuted }]}>
+                <Text
+                  style={[
+                    styles.removeLabel,
+                    { color: theme.textMuted, fontFamily: theme.fontFamily },
+                  ]}
+                >
                   Remove
                 </Text>
               </Pressable>
@@ -119,6 +140,10 @@ export function EffectPanel({
             />
           </View>
         </View>
+      ) : null}
+
+      {showHeader ? (
+        <View style={[styles.divider, { backgroundColor: theme.track }]} />
       ) : null}
 
       <View style={layout === 'knobs' ? styles.knobGrid : styles.sliderStack}>
@@ -200,6 +225,7 @@ const styles = StyleSheet.create({
   panel: {
     padding: 16,
     gap: 14,
+    marginBottom: 2,
   },
   header: {
     flexDirection: 'row',
@@ -219,8 +245,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-  remove: {
-    fontSize: 12,
+  removeButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  removeLabel: {
+    fontSize: 11,
+    letterSpacing: 0.4,
+  },
+  divider: {
+    height: 1,
+    marginHorizontal: -4,
+    opacity: 0.6,
   },
   knobGrid: {
     flexDirection: 'row',

@@ -5,6 +5,7 @@
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -27,14 +28,8 @@ import {
 } from 'react-native-audio-effects/ui';
 
 import { pickAudioFile } from '../pickAudioFile';
+import { BUNDLED_SAMPLES, type BundledSample } from '../samples';
 import { useLiveLevels, useLiveProgress } from '../useLive';
-
-/**
- * A sample bundled into the example app, so the screen works without picking
- * a file. `ios/Samples` is a folder reference on the app target, so the path
- * keeps its directory inside the bundle.
- */
-const BUNDLED_SAMPLE = 'Samples/beat.aiff';
 
 export function StudioScreen() {
   const [source, setSource] = useState<Source>();
@@ -42,6 +37,8 @@ export function StudioScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [status, setStatus] = useState<string>();
+  const [sample, setSample] = useState<BundledSample>();
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const levels = useLiveLevels(source);
   const progress = useLiveProgress(source);
@@ -126,8 +123,57 @@ export function StudioScreen() {
 
       <View style={styles.row}>
         <Button label="Import a sound" onPress={importFile} primary />
-        <Button label="Use sample" onPress={() => load(BUNDLED_SAMPLE)} />
+        <Button
+          label={sample ? sample.label : 'Use a sample'}
+          onPress={() => setPickerOpen(true)}
+        />
       </View>
+
+      {sample ? <Text style={styles.hintLine}>{sample.hint}</Text> : null}
+
+      <Modal
+        visible={pickerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPickerOpen(false)}
+      >
+        <Pressable style={styles.backdrop} onPress={() => setPickerOpen(false)}>
+          {/* Stop presses inside the sheet from closing it. */}
+          <Pressable style={styles.sheet} onPress={() => {}}>
+            <Text style={styles.sheetTitle}>Choose a sample</Text>
+            <ScrollView style={styles.sheetList}>
+              {BUNDLED_SAMPLES.map((entry) => {
+                const selected = entry.path === sample?.path;
+                return (
+                  <Pressable
+                    key={entry.path}
+                    onPress={() => {
+                      setPickerOpen(false);
+                      setSample(entry);
+                      load(entry.path);
+                    }}
+                    style={({ pressed }) => [
+                      styles.sheetRow,
+                      selected && styles.sheetRowSelected,
+                      pressed && styles.sheetRowPressed,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.sheetLabel,
+                        selected && styles.sheetLabelSelected,
+                      ]}
+                    >
+                      {entry.label}
+                    </Text>
+                    <Text style={styles.sheetHint}>{entry.hint}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {isLoading ? <ActivityIndicator color={darkTheme.accent} /> : null}
       {status ? <Text style={styles.status}>{status}</Text> : null}
@@ -203,7 +249,7 @@ export function StudioScreen() {
         </>
       ) : (
         <Text style={styles.hint}>
-          Import an audio file or load the bundled sample to start.
+          Import an audio file or pick one of the bundled samples to start.
         </Text>
       )}
     </ScrollView>
@@ -275,6 +321,72 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 24,
     textAlign: 'center',
+    fontFamily: darkTheme.fontFamily,
+  },
+  hintLine: {
+    color: darkTheme.textMuted,
+    fontSize: 11.5,
+    fontFamily: darkTheme.fontFamily,
+    fontStyle: 'italic',
+  },
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(7,5,12,0.75)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: darkTheme.control,
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    paddingTop: 18,
+    paddingBottom: 34,
+    paddingHorizontal: 16,
+    maxHeight: '72%',
+    shadowColor: darkTheme.shadowDark,
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.9,
+    shadowRadius: 16,
+    elevation: 16,
+  },
+  sheetTitle: {
+    color: darkTheme.text,
+    fontSize: 17,
+    fontWeight: '700',
+    fontFamily: darkTheme.fontFamily,
+    marginBottom: 12,
+  },
+  sheetList: {
+    flexGrow: 0,
+  },
+  sheetRow: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    marginBottom: 8,
+    backgroundColor: darkTheme.surface,
+    borderWidth: 1,
+    borderColor: darkTheme.track,
+  },
+  sheetRowSelected: {
+    borderColor: darkTheme.accent,
+  },
+  sheetRowPressed: {
+    opacity: 0.7,
+  },
+  sheetLabel: {
+    color: darkTheme.text,
+    fontSize: 15,
+    fontWeight: '600',
+    fontFamily: darkTheme.fontFamily,
+  },
+  sheetLabelSelected: {
+    color: darkTheme.accent,
+  },
+  sheetHint: {
+    color: darkTheme.textMuted,
+    fontSize: 11.5,
+    fontFamily: darkTheme.fontFamily,
+    marginTop: 3,
   },
   transport: {
     flexDirection: 'row',

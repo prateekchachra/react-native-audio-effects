@@ -144,11 +144,11 @@ export function neuroRaised(theme: AudioTheme, radius?: number): ViewStyle {
     borderRadius: radius ?? theme.radius,
     backgroundColor: theme.control,
     shadowColor: theme.shadowDark,
-    shadowOffset: { width: 4 * theme.depth, height: 4 * theme.depth },
-    shadowOpacity: 0.9,
-    shadowRadius: 8 * theme.depth,
+    shadowOffset: { width: 5 * theme.depth, height: 7 * theme.depth },
+    shadowOpacity: 0.95,
+    shadowRadius: 12 * theme.depth,
     // Android has no offset shadow, so elevation is the closest equivalent.
-    elevation: 6 * theme.depth,
+    elevation: 10 * theme.depth,
   };
 }
 

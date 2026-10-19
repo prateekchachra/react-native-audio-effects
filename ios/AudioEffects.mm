@@ -190,6 +190,18 @@ static void (^RNAEValueCompletion(RCTPromiseResolveBlock resolve,
   [_impl setOscillatorParameter:sourceId key:key value:value];
 }
 
+- (void)setEnvelopeParameter:(double)sourceId
+                         key:(NSString *)key
+                       value:(double)value
+{
+  [_impl setEnvelopeParameter:sourceId key:key value:value];
+}
+
+- (void)gateSource:(double)sourceId on:(BOOL)on
+{
+  [_impl gateSource:sourceId on:on];
+}
+
 #pragma mark - Effects
 
 - (void)createEffect:(double)sourceId

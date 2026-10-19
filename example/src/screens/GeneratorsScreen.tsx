@@ -5,12 +5,15 @@
  * engine, the effect chain and metering are all working.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   AudioEngine,
+  ENVELOPE_PARAMS,
   GENERATORS,
   SINE,
+  envelopeDefaults,
+  getEffect,
   getGenerator,
   midiToFrequency,
   noteName,
@@ -49,6 +52,13 @@ export function GeneratorsScreen() {
   const [frequency, setFrequency] = useState(220);
   const [amplitude, setAmplitude] = useState(0.3);
   const [lastNote, setLastNote] = useState<number>();
+  const [envelope, setEnvelope] =
+    useState<Record<string, number>>(envelopeDefaults);
+
+  // Read inside the create effect without making it a dependency, which
+  // would rebuild the oscillator on every envelope tweak.
+  const envelopeRef = useRef(envelope);
+  envelopeRef.current = envelope;
 
   const levels = useLiveLevels(source);
   const descriptor = getGenerator(waveform);
@@ -68,6 +78,12 @@ export function GeneratorsScreen() {
       if (cancelled) {
         await created.release();
         return;
+      }
+      for (const [key, value] of Object.entries(envelopeRef.current)) {
+        created.setEnvelopeParam(
+          key as 'attack' | 'decay' | 'sustain' | 'release',
+          value
+        );
       }
       setSource(created);
       setEffects([]);
@@ -107,10 +123,13 @@ export function GeneratorsScreen() {
       setLastNote(midi);
       setFrequency(hz);
       source.setOscillatorParam('frequency', hz);
+      // The stream runs continuously; the envelope gate is what makes a note.
+      // Restarting the stream per key press would click and add latency.
       if (!isPlaying) {
         await source.play({ loop: true });
         setIsPlaying(true);
       }
+      source.gate(true);
     },
     [source, isPlaying]
   );
@@ -118,12 +137,21 @@ export function GeneratorsScreen() {
   // Hold-to-sound: releasing silences the oscillator again. A real instrument
   // would use an envelope here; this is a single-voice generator, so gating
   // amplitude is the honest equivalent.
-  const noteOff = useCallback(async () => {
-    if (source && isPlaying) {
-      await source.stop();
-      setIsPlaying(false);
-    }
-  }, [source, isPlaying]);
+  const noteOff = useCallback(() => {
+    // Release the envelope and let it ring out; the stream stays up.
+    source?.gate(false);
+  }, [source]);
+
+  const setEnvelopeParam = useCallback(
+    (key: string, value: number) => {
+      setEnvelope((previous) => ({ ...previous, [key]: value }));
+      source?.setEnvelopeParam(
+        key as 'attack' | 'decay' | 'sustain' | 'release',
+        value
+      );
+    },
+    [source]
+  );
 
   const addEffect = useCallback(
     async (type: EffectType) => {
@@ -202,19 +230,36 @@ export function GeneratorsScreen() {
         </View>
       </View>
 
-      <Pressable
-        onPress={toggle}
-        style={({ pressed }) => [
-          styles.button,
-          isPlaying && styles.buttonActive,
-          pressed && styles.buttonPressed,
-        ]}
-      >
-        <Text style={styles.buttonText}>{isPlaying ? 'Stop' : 'Play'}</Text>
-      </Pressable>
+      {/* Noise has no notes to press, so it keeps a transport button.
+          Pitched sources are played from the keyboard instead. */}
+      {!isPitched ? (
+        <Pressable
+          onPress={toggle}
+          style={({ pressed }) => [
+            styles.button,
+            isPlaying && styles.buttonActive,
+            pressed && styles.buttonPressed,
+          ]}
+        >
+          <Text style={styles.buttonText}>{isPlaying ? 'Stop' : 'Play'}</Text>
+        </Pressable>
+      ) : null}
 
       {isPitched ? (
         <>
+          <Text style={styles.subheading}>Envelope</Text>
+          <View style={styles.adsrRow}>
+            {ENVELOPE_PARAMS.map((param) => (
+              <Knob
+                key={param.key}
+                param={param}
+                value={envelope[param.key] ?? param.default}
+                onChange={(value) => setEnvelopeParam(param.key, value)}
+                size={60}
+              />
+            ))}
+          </View>
+
           <View style={styles.keyboardHeader}>
             <Text style={styles.subheading}>Keyboard</Text>
             <Text style={styles.noteReadout}>
@@ -239,7 +284,9 @@ export function GeneratorsScreen() {
             onPress={() => addEffect(type)}
             style={styles.chip}
           >
-            <Text style={styles.chipText}>{type}</Text>
+            <Text style={styles.chipText}>
+              {getEffect(type)?.label ?? type}
+            </Text>
           </Pressable>
         ))}
       </View>
@@ -267,19 +314,31 @@ const styles = StyleSheet.create({
   },
   heading: {
     color: darkTheme.text,
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '700',
+    fontFamily: darkTheme.fontFamily,
+    letterSpacing: 0.3,
   },
   subheading: {
     color: darkTheme.textMuted,
-    fontSize: 11,
+    fontSize: 10,
+    fontFamily: darkTheme.fontFamily,
     textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginTop: 6,
+    letterSpacing: 1.1,
+    marginTop: 8,
   },
   description: {
     color: darkTheme.textMuted,
     fontSize: 12,
+    fontFamily: darkTheme.fontFamily,
+    lineHeight: 18,
+    marginBottom: 10,
+  },
+  adsrRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 6,
+    marginBottom: 4,
   },
   keyboardHeader: {
     flexDirection: 'row',
@@ -288,14 +347,16 @@ const styles = StyleSheet.create({
   },
   noteReadout: {
     color: darkTheme.accent,
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
+    fontFamily: darkTheme.monoFontFamily,
     fontVariant: ['tabular-nums'],
   },
   controls: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 20,
+    gap: 22,
+    marginTop: 4,
   },
   meters: {
     flexDirection: 'row',
@@ -307,12 +368,15 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   chip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+    borderRadius: 10,
     backgroundColor: darkTheme.control,
-    borderWidth: 1,
-    borderColor: darkTheme.track,
+    shadowColor: darkTheme.shadowDark,
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 0.85,
+    shadowRadius: 5,
+    elevation: 4,
   },
   chipActive: {
     backgroundColor: darkTheme.accent,
@@ -320,19 +384,24 @@ const styles = StyleSheet.create({
   },
   chipText: {
     color: darkTheme.text,
-    fontSize: 12,
+    fontSize: 12.5,
+    fontFamily: darkTheme.fontFamily,
+    letterSpacing: 0.2,
   },
   chipTextActive: {
     color: darkTheme.surface,
     fontWeight: '600',
   },
   button: {
-    paddingVertical: 12,
-    borderRadius: 8,
+    paddingVertical: 14,
+    borderRadius: darkTheme.radius,
     alignItems: 'center',
     backgroundColor: darkTheme.control,
-    borderWidth: 1,
-    borderColor: darkTheme.track,
+    shadowColor: darkTheme.shadowDark,
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 0.9,
+    shadowRadius: 8,
+    elevation: 6,
   },
   buttonActive: {
     backgroundColor: darkTheme.accent,
@@ -345,5 +414,7 @@ const styles = StyleSheet.create({
     color: darkTheme.text,
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: darkTheme.fontFamily,
+    letterSpacing: 0.4,
   },
 });

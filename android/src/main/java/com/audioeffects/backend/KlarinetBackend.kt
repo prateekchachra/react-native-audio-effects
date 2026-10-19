@@ -354,6 +354,18 @@ internal class KlarinetBackend(private val context: Context) : AudioBackend {
     }
   }
 
+  override fun setEnvelopeParameter(sourceId: Int, key: String, value: Float) {
+    synchronized(lock) {
+      sources[sourceId]?.generator?.envelope?.setParameter(key, value)
+    }
+  }
+
+  override fun gate(sourceId: Int, on: Boolean) {
+    synchronized(lock) {
+      sources[sourceId]?.generator?.gate(on)
+    }
+  }
+
   // --------------------------------------------------------------- effects
 
   override fun createEffect(sourceId: Int, type: String): Int = synchronized(lock) {

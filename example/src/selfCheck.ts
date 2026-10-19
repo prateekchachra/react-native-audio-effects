@@ -365,6 +365,59 @@ export async function runSelfCheck(): Promise<CheckResult[]> {
     }
   }
 
+  // 8. Envelope ----------------------------------------------------------
+  // An ADSR is only correct if gating actually changes the level, so this
+  // measures silence before the note, signal during it, and silence after
+  // the release has had time to finish.
+  try {
+    const osc = await AudioEngine.createOscillator('sine', {
+      frequency: 440,
+      amplitude: 0.5,
+    });
+    osc.setEnvelopeParam('attack', 5);
+    osc.setEnvelopeParam('decay', 50);
+    osc.setEnvelopeParam('sustain', 0.8);
+    osc.setEnvelopeParam('release', 60);
+
+    await osc.play({ loop: true });
+    // A generator started with the transport and never gated is deliberately
+    // held open, so silence has to be established with an explicit note off
+    // rather than assumed.
+    osc.gate(false);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const beforeGate = await awaitSignal(osc.id, 400);
+
+    osc.gate(true);
+    const duringNote = await awaitSignal(osc.id, 600);
+
+    osc.gate(false);
+    // Wait out the release before measuring the tail.
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const afterRelease = await awaitSignal(osc.id, 400);
+
+    await osc.stop();
+    await osc.release();
+
+    results.push(
+      log({
+        name: 'envelope gates the generator',
+        ok: beforeGate < 0.01 && duringNote > 0.05 && afterRelease < 0.01,
+        detail:
+          `idle=${beforeGate.toFixed(4)} ` +
+          `held=${duringNote.toFixed(4)} ` +
+          `released=${afterRelease.toFixed(4)}`,
+      })
+    );
+  } catch (error) {
+    results.push(
+      log({
+        name: 'envelope gates the generator',
+        ok: false,
+        detail: String(error),
+      })
+    );
+  }
+
   AudioEngine.setMetering(false);
 
   const failed = results.filter((r) => !r.ok);

@@ -34,6 +34,93 @@ import kotlin.random.Random
  * so what aliases is far enough down to be inaudible and the extra cost is
  * not worth paying.
  */
+
+/**
+ * ADSR amplitude envelope.
+ *
+ * Klarinet has no envelope of its own, but the generator owns its callback,
+ * so the shape is applied per sample here. Attack and decay are linear ramps
+ * and release is exponential, which is the usual pairing: a linear attack
+ * sounds immediate, while a linear release sounds like it stops abruptly
+ * rather than fading.
+ *
+ * Mirrors `AmplitudeEnvelope` on iOS, which takes the same four parameters.
+ */
+internal class Envelope(private val sampleRate: Int) {
+  private enum class Stage { IDLE, ATTACK, DECAY, SUSTAIN, RELEASE }
+
+  @Volatile var attackMs = 10f
+  @Volatile var decayMs = 200f
+  @Volatile var sustain = 0.7f
+  @Volatile var releaseMs = 400f
+
+  private var stage = Stage.IDLE
+  private var level = 0f
+  /** Level the release started from, so a short note still fades smoothly. */
+  private var releaseFrom = 0f
+
+  /** Note on. Restarts the attack from the current level, so retriggering
+   *  while a note is still sounding does not click. */
+  fun gateOn() {
+    stage = Stage.ATTACK
+  }
+
+  /** Note off. */
+  fun gateOff() {
+    if (stage != Stage.IDLE) {
+      releaseFrom = level
+      stage = Stage.RELEASE
+    }
+  }
+
+  val isIdle: Boolean get() = stage == Stage.IDLE && level <= 0f
+
+  private fun stepFor(ms: Float): Float {
+    val frames = (ms / 1000f) * sampleRate
+    return if (frames <= 1f) 1f else 1f / frames
+  }
+
+  /** Next envelope value, 0..1. Call once per frame. */
+  fun next(): Float {
+    when (stage) {
+      Stage.IDLE -> level = 0f
+      Stage.ATTACK -> {
+        level += stepFor(attackMs)
+        if (level >= 1f) {
+          level = 1f
+          stage = Stage.DECAY
+        }
+      }
+      Stage.DECAY -> {
+        level -= stepFor(decayMs) * (1f - sustain)
+        if (level <= sustain) {
+          level = sustain
+          stage = Stage.SUSTAIN
+        }
+      }
+      Stage.SUSTAIN -> level = sustain
+      Stage.RELEASE -> {
+        // Exponential decay towards zero, with a floor so it actually ends.
+        level -= stepFor(releaseMs) * releaseFrom
+        if (level <= 0.0001f) {
+          level = 0f
+          stage = Stage.IDLE
+        }
+      }
+    }
+    return level
+  }
+
+  fun setParameter(key: String, value: Float) {
+    when (key) {
+      "attack" -> attackMs = value.coerceAtLeast(0.1f)
+      "decay" -> decayMs = value.coerceAtLeast(0.1f)
+      "sustain" -> sustain = value.coerceIn(0f, 1f)
+      "release" -> releaseMs = value.coerceAtLeast(0.1f)
+    }
+  }
+}
+
 internal abstract class Generator(
   @Volatile var frequency: Float,
   @Volatile var amplitude: Float,
@@ -42,6 +129,20 @@ internal abstract class Generator(
 ) : AudioStreamCallback {
 
   @Volatile var isRunning: Boolean = false
+
+  /**
+   * Amplitude envelope.
+   *
+   * Bypassed until the first gate: a generator played with the transport
+   * button should just sound, without needing a note event first.
+   */
+  val envelope = Envelope(sampleRate)
+  @Volatile private var envelopeEngaged = false
+
+  fun gate(on: Boolean) {
+    envelopeEngaged = true
+    if (on) envelope.gateOn() else envelope.gateOff()
+  }
 
   /** Most recent peak, for metering without a separate tap. */
   private val lastPeakBits = AtomicInteger(0)
@@ -63,8 +164,10 @@ internal abstract class Generator(
     var peak = 0f
     var index = 0
     val gain = amplitude
+    val gated = envelopeEngaged
     for (frame in 0 until numFrames) {
-      val sample = nextSample() * gain
+      val shaped = if (gated) envelope.next() else 1f
+      val sample = nextSample() * gain * shaped
       val magnitude = abs(sample)
       if (magnitude > peak) peak = magnitude
       // Same sample to every channel: these sources are mono by nature.

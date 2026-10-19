@@ -45,6 +45,12 @@ internal interface AudioBackend {
   fun setSourceVolume(sourceId: Int, volume: Float)
   fun setOscillatorParameter(sourceId: Int, key: String, value: Float)
 
+  /** ADSR parameter on a generator. Times in ms, sustain a 0..1 level. */
+  fun setEnvelopeParameter(sourceId: Int, key: String, value: Float)
+
+  /** Note on / note off for a generator's envelope. */
+  fun gate(sourceId: Int, on: Boolean)
+
   // --------------------------------------------------------------- effects
 
   /** @throws EffectUnavailableException when this backend has no such effect. */

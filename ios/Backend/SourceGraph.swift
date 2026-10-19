@@ -2,6 +2,7 @@ import AudioKit
 import AudioKitEX
 import AVFoundation
 import Foundation
+import SoundpipeAudioKit
 
 /**
  One effect in a chain, as bookkeeping rather than as a live node.
@@ -69,11 +70,31 @@ final class SourceGraph {
   /// underneath without touching the engine's output wiring.
   let output = Mixer()
 
+  /**
+   ADSR envelope, for generators only.
+
+   Sits between the generator and the effect chain so the shape is applied
+   before anything downstream. File sources have no envelope: they are gated
+   by transport rather than by note events.
+   */
+  private(set) var envelope: AmplitudeEnvelope?
+
+  /**
+   Whether anything has gated the envelope yet.
+
+   `AmplitudeEnvelope` starts closed, so a generator started with the
+   transport button and never gated would be silent. Until the first explicit
+   note event the envelope is held open, which makes a plain `play()` behave
+   the way it did before envelopes existed.
+   */
+  private var envelopeEngaged = false
+
   private(set) var slots: [EffectSlot] = []
   private var amplitudeTap: AmplitudeTap?
 
   var head: Node {
     if let player { return player }
+    if let envelope { return envelope }
     if let generator { return generator.node }
     fatalError("A source must have either a player or a generator")
   }
@@ -93,7 +114,41 @@ final class SourceGraph {
     self.generator = generator
     self.fileURL = nil
     self.durationSec = 0
+    self.envelope = AmplitudeEnvelope(generator.node)
     rebuild()
+  }
+
+  /// Apply an ADSR parameter. Times arrive in milliseconds, as the schema
+  /// declares them; AudioKit wants seconds.
+  func setEnvelopeParameter(_ key: String, _ value: Float) {
+    guard let envelope else { return }
+    switch key {
+    case "attack": envelope.attackDuration = max(value / 1000, 0.0001)
+    case "decay": envelope.decayDuration = max(value / 1000, 0.0001)
+    case "sustain": envelope.sustainLevel = min(max(value, 0), 1)
+    case "release": envelope.releaseDuration = max(value / 1000, 0.0001)
+    default: break
+    }
+  }
+
+  /// Note on / note off.
+  func gate(_ on: Bool) {
+    guard let envelope else { return }
+    envelopeEngaged = true
+    on ? envelope.openGate() : envelope.closeGate()
+  }
+
+  /// Hold the envelope open for a generator that is played rather than
+  /// gated. No-op once a real note event has happened.
+  func openGateIfUngated() {
+    guard let envelope, !envelopeEngaged else { return }
+    envelope.openGate()
+  }
+
+  /// Close the envelope when the transport stops, so a later play starts clean.
+  func closeGateForTransport() {
+    guard let envelope, !envelopeEngaged else { return }
+    envelope.closeGate()
   }
 
   // MARK: - Chain structure

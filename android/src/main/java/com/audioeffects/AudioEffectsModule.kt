@@ -185,6 +185,14 @@ class AudioEffectsModule(reactContext: ReactApplicationContext) :
     backend.setOscillatorParameter(sourceId.toInt(), key, value.toFloat())
   }
 
+  override fun setEnvelopeParameter(sourceId: Double, key: String, value: Double) {
+    backend.setEnvelopeParameter(sourceId.toInt(), key, value.toFloat())
+  }
+
+  override fun gateSource(sourceId: Double, on: Boolean) {
+    backend.gate(sourceId.toInt(), on)
+  }
+
   // --------------------------------------------------------------- effects
 
   override fun createEffect(sourceId: Double, type: String, promise: Promise) =

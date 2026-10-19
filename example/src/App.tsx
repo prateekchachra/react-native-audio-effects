@@ -125,6 +125,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     borderTopWidth: 1,
     borderTopColor: darkTheme.track,
+    backgroundColor: darkTheme.control,
   },
   tab: {
     flex: 1,
@@ -134,6 +135,8 @@ const styles = StyleSheet.create({
   tabLabel: {
     color: darkTheme.textMuted,
     fontSize: 13,
+    fontFamily: darkTheme.fontFamily,
+    letterSpacing: 0.4,
   },
   tabLabelActive: {
     color: darkTheme.accent,

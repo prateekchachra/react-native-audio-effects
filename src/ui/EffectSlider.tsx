@@ -22,7 +22,13 @@ import {
   toNormalized,
   type ParamDescriptor,
 } from '../schema';
-import { useAudioTheme, type AudioTheme } from './theme';
+import {
+  labelStyle,
+  neuroInset,
+  readoutStyle,
+  useAudioTheme,
+  type AudioTheme,
+} from './theme';
 
 const TRACK_HEIGHT = 4;
 const HANDLE_SIZE = 18;
@@ -116,15 +122,14 @@ export function EffectSlider({
       {(showLabel || showValue) && (
         <View style={styles.header}>
           {showLabel ? (
-            <Text style={[styles.label, { color: theme.textMuted }]}>
-              {label ?? param.label}
-            </Text>
+            <Text style={labelStyle(theme)}>{label ?? param.label}</Text>
           ) : null}
           {showValue ? (
             <Text
               style={[
+                readoutStyle(theme),
                 styles.value,
-                { color: disabled ? theme.disabled : theme.text },
+                disabled && { color: theme.disabled },
               ]}
             >
               {formatValue(param, value)}
@@ -143,7 +148,7 @@ export function EffectSlider({
           accessibilityValue={{ text: formatValue(param, value) }}
           accessibilityState={{ disabled }}
         >
-          <View style={[styles.track, { backgroundColor: theme.track }]}>
+          <View style={[styles.track, neuroInset(theme, TRACK_HEIGHT / 2)]}>
             <Animated.View
               style={[styles.fill, { backgroundColor: accent }, fillStyle]}
             />
@@ -174,13 +179,7 @@ const styles = StyleSheet.create({
     alignItems: 'baseline',
     marginBottom: 4,
   },
-  label: {
-    fontSize: 11,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
   value: {
-    fontSize: 11,
     fontVariant: ['tabular-nums'],
   },
   // Taller than the track so the control is comfortably touchable.

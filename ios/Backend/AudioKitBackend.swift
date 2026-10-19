@@ -192,6 +192,7 @@ final class AudioKitBackend {
         player.play()
       } else {
         graph.generator?.play()
+        graph.openGateIfUngated()
       }
       // Tapped here rather than at creation: the chain is settled by now, and
       // installing a tap before it is leaves the player silent.
@@ -203,6 +204,7 @@ final class AudioKitBackend {
     try queue.sync {
       let graph = try require(sourceId)
       // A generator has no position to resume from, so pausing one is a stop.
+      graph.closeGateForTransport()
       graph.player?.pause() ?? graph.generator?.stop()
     }
   }
@@ -210,6 +212,7 @@ final class AudioKitBackend {
   func stopSource(_ sourceId: Int) throws {
     try queue.sync {
       let graph = try require(sourceId)
+      graph.closeGateForTransport()
       graph.player?.stop() ?? graph.generator?.stop()
     }
   }
@@ -238,6 +241,20 @@ final class AudioKitBackend {
       case "amplitude": generator.setAmplitude(value)
       default: break
       }
+    }
+  }
+
+  /// ADSR parameter for a generator source. Ignored for file sources.
+  func setEnvelopeParameter(_ sourceId: Int, key: String, value: Float) {
+    queue.sync {
+      sources[sourceId]?.setEnvelopeParameter(key, value)
+    }
+  }
+
+  /// Note on / note off for a generator's envelope.
+  func gate(_ sourceId: Int, on: Bool) {
+    queue.sync {
+      sources[sourceId]?.gate(on)
     }
   }
 

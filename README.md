@@ -10,10 +10,11 @@ so a knob can never disagree with the effect behind it.
 - **17 effects** — delay, reverb, chorus, flanger, phaser, tremolo,
   compressor, limiter, noise gate, 4-band parametric EQ, low/high/band-pass
   filters, gain, pan, distortion, bit crusher.
-- **7 generators** — sine, square, saw, triangle, and white/pink/brown noise.
+- **7 generators** — sine, square, saw, triangle, and white/pink/brown noise,
+  each with an ADSR envelope and a playable keyboard.
 - **A control kit** — rotary knobs, taper-aware sliders, XY pads, level
-  meters, a waveform view with scrub-to-seek, A/B preset compare, and an
-  effect rack that builds itself from the schema.
+  meters, a waveform view with scrub-to-seek, a MIDI keyboard, A/B preset
+  compare, and an effect rack that builds itself from the schema.
 - **TurboModule** on RN 0.88, Swift + AudioKit on iOS, Kotlin + Klarinet
   (Oboe) on Android.
 
@@ -150,6 +151,28 @@ import { Keyboard } from 'react-native-audio-effects/ui';
 `midiToFrequency` takes a tuning reference, so `midiToFrequency(69, 432)`
 works if you need something other than A440.
 
+### Envelopes
+
+A raw oscillator is a continuous tone; an ADSR envelope is what turns it into
+a note. Gate it per note rather than starting and stopping the source — the
+stream stays up between notes, so there is no click and no restart latency.
+
+```ts
+osc.setEnvelopeParam('attack', 15);    // ms
+osc.setEnvelopeParam('decay', 180);    // ms
+osc.setEnvelopeParam('sustain', 0.6);  // level, 0..1
+osc.setEnvelopeParam('release', 500);  // ms
+
+await osc.play({ loop: true }); // start the stream once
+osc.gate(true);                 // note on
+osc.gate(false);                // note off, rings out over the release
+```
+
+Envelopes apply to generators, not to the effect chain: they are triggered by
+note events rather than running continuously. On iOS this is AudioKit's
+`AmplitudeEnvelope`; on Android it is a per-sample state machine in the stream
+callback, since Klarinet has no envelope of its own.
+
 ### Metering
 
 ```ts
@@ -198,6 +221,25 @@ instead of being silently clamped on one. That is why the EQ caps at ±20 dB
 Generators differ in implementation: iOS uses AudioKit's band-limited
 wavetables, Android synthesises with PolyBLEP in the stream callback. They are
 perceptually equivalent but not sample-identical at high fundamentals.
+
+## Theming
+
+The kit ships a violet-on-near-black theme and a light variant, both with
+soft neumorphic shading: a dark shadow below-right and a light one
+above-left, so controls read as raised out of the panel rather than drawn on
+it. Override any token, or set `depth: 0` to turn the shading off entirely.
+
+```tsx
+import { ThemeProvider, darkTheme } from 'react-native-audio-effects/ui';
+
+<ThemeProvider value={{ ...darkTheme, accent: '#ff7ab6', depth: 0 }}>
+  <App />
+</ThemeProvider>;
+```
+
+Numeric readouts use a monospaced face so a value does not shift sideways as
+its digits change under a drag — a small thing that is very visible once you
+are dragging a knob.
 
 ## Architecture
 
@@ -252,6 +294,8 @@ Delay time is now **milliseconds** (it was seconds), and mix/feedback are
 
 ## Roadmap
 
+- Polyphony — the generator is currently one voice, so a new note retunes the
+  oscillator rather than layering
 - Distortion and bit crusher on Android
 - Shelving EQ band types (needs both backends to support them)
 - Offline render to file

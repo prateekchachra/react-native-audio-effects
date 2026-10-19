@@ -154,6 +154,18 @@ public final class AudioEffectsImpl: NSObject {
     backend.setOscillatorParameter(Int(sourceId), key: key, value: Float(value))
   }
 
+  @objc public func setEnvelopeParameter(
+    _ sourceId: Double,
+    key: String,
+    value: Double
+  ) {
+    backend.setEnvelopeParameter(Int(sourceId), key: key, value: Float(value))
+  }
+
+  @objc public func gateSource(_ sourceId: Double, on: Bool) {
+    backend.gate(Int(sourceId), on: on)
+  }
+
   // MARK: - Effects
 
   @objc public func createEffect(

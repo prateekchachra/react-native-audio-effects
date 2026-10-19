@@ -160,6 +160,20 @@ export interface Spec extends TurboModule {
    */
   setOscillatorParameter(sourceId: number, key: string, value: number): void;
 
+  /**
+   * Set an ADSR envelope parameter on a generator — `attack`, `decay`,
+   * `sustain` or `release`. Times are milliseconds; sustain is a 0..1 level.
+   */
+  setEnvelopeParameter(sourceId: number, key: string, value: number): void;
+
+  /**
+   * Open or close a generator's envelope gate: note on, note off.
+   *
+   * Separate from `playSource` because the stream keeps running between
+   * notes — restarting it per key press would click and add latency.
+   */
+  gateSource(sourceId: number, on: boolean): void;
+
   // --------------------------------------------------------------- effects
 
   /**

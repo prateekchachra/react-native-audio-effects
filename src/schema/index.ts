@@ -43,6 +43,7 @@ export {
 
 export {
   ANTIALIAS_PARAM,
+  ENVELOPE_PARAMS,
   BROWN_NOISE,
   GENERATORS,
   PINK_NOISE,
@@ -51,6 +52,7 @@ export {
   SQUARE,
   TRIANGLE,
   WHITE_NOISE,
+  envelopeDefaults,
   generatorDefaults,
   getGenerator,
 } from './generators';

@@ -38,7 +38,14 @@ import {
   toNormalized,
   type ParamDescriptor,
 } from '../schema';
-import { useAudioTheme, type AudioTheme } from './theme';
+import {
+  labelStyle,
+  neuroInner,
+  neuroRaised,
+  readoutStyle,
+  useAudioTheme,
+  type AudioTheme,
+} from './theme';
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 const AnimatedLine = Animated.createAnimatedComponent(Line);
@@ -213,45 +220,48 @@ export function Knob({
           accessibilityLabel={label ?? param.label}
           accessibilityValue={{ text: formatValue(param, value) }}
           accessibilityState={{ disabled }}
+          // Two nested views because a React Native view carries one shadow,
+          // and the neumorphic read needs a dark one below-right and a light
+          // one above-left.
+          style={[neuroRaised(theme, size / 2), disabled && styles.flat]}
         >
-          <Svg width={size} height={size}>
-            {/* Unfilled travel */}
-            <Path
-              d={arcPath(center, center, radius, 1)}
-              stroke={theme.track}
-              strokeWidth={4}
-              strokeLinecap="round"
-              fill="none"
-            />
-            <AnimatedPath
-              animatedProps={animatedArc}
-              stroke={strokeColor}
-              strokeWidth={4}
-              strokeLinecap="round"
-              fill="none"
-            />
-            <Circle
-              cx={center}
-              cy={center}
-              r={radius * 0.62}
-              fill={disabled ? theme.disabled : theme.control}
-            />
-            <AnimatedLine
-              animatedProps={animatedPointer}
-              stroke={pointerColor}
-              strokeWidth={2}
-              strokeLinecap="round"
-            />
-          </Svg>
+          <View style={neuroInner(theme, size / 2)}>
+            <Svg width={size} height={size}>
+              {/* Unfilled travel */}
+              <Path
+                d={arcPath(center, center, radius, 1)}
+                stroke={theme.track}
+                strokeWidth={4}
+                strokeLinecap="round"
+                fill="none"
+              />
+              <AnimatedPath
+                animatedProps={animatedArc}
+                stroke={strokeColor}
+                strokeWidth={4}
+                strokeLinecap="round"
+                fill="none"
+              />
+              <Circle
+                cx={center}
+                cy={center}
+                r={radius * 0.62}
+                fill={disabled ? theme.disabled : theme.control}
+              />
+              <AnimatedLine
+                animatedProps={animatedPointer}
+                stroke={pointerColor}
+                strokeWidth={2}
+                strokeLinecap="round"
+              />
+            </Svg>
+          </View>
         </View>
       </GestureDetector>
 
       {showValue ? (
         <Text
-          style={[
-            styles.value,
-            { color: textColor, fontFamily: theme.fontFamily },
-          ]}
+          style={[readoutStyle(theme), styles.value, { color: textColor }]}
           numberOfLines={1}
         >
           {formatValue(param, value)}
@@ -261,8 +271,9 @@ export function Knob({
       {showLabel ? (
         <Text
           style={[
+            labelStyle(theme),
             styles.label,
-            { color: disabled ? theme.disabled : theme.textMuted },
+            disabled && { color: theme.disabled },
           ]}
           numberOfLines={1}
         >
@@ -278,15 +289,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   value: {
-    marginTop: 4,
-    fontSize: 11,
+    marginTop: 10,
     fontVariant: ['tabular-nums'],
   },
   label: {
-    marginTop: 1,
-    fontSize: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    marginTop: 3,
+  },
+  /** A disabled control should not look raised. */
+  flat: {
+    shadowOpacity: 0,
+    elevation: 0,
   },
 });
 

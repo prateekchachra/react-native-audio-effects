@@ -4,6 +4,7 @@
 
 import NativeAudioEffects from '../NativeAudioEffects';
 import {
+  ENVELOPE_PARAMS,
   getGenerator,
   quantize,
   type EffectType,
@@ -110,6 +111,46 @@ export class Source {
       key,
       quantize(param, value)
     );
+  }
+
+  /**
+   * Set an ADSR envelope parameter: `attack`, `decay` and `release` in
+   * milliseconds, `sustain` as a 0..1 level.
+   *
+   * Generators only — a file source is gated by transport, not by notes.
+   */
+  setEnvelopeParam(
+    key: 'attack' | 'decay' | 'sustain' | 'release',
+    value: number
+  ): void {
+    this.assertLive();
+    if (this.kind !== 'generator') {
+      return;
+    }
+    const param = ENVELOPE_PARAMS.find((candidate) => candidate.key === key);
+    if (!param) {
+      return;
+    }
+    NativeAudioEffects.setEnvelopeParameter(
+      this.id,
+      key,
+      quantize(param, value)
+    );
+  }
+
+  /**
+   * Note on / note off against the envelope.
+   *
+   * Distinct from {@link play}: the stream keeps running between notes, so
+   * gating avoids the click and latency of restarting it per key press. Call
+   * `play()` once, then gate per note.
+   */
+  gate(on: boolean): void {
+    this.assertLive();
+    if (this.kind !== 'generator') {
+      return;
+    }
+    NativeAudioEffects.gateSource(this.id, on);
   }
 
   // ----------------------------------------------------------------- chain

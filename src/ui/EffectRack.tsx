@@ -26,7 +26,12 @@ import { isParamAvailable } from '../api/capabilities';
 import type { ParamDescriptor } from '../schema';
 import { EffectSlider } from './EffectSlider';
 import { Knob } from './Knob';
-import { useAudioTheme, type AudioTheme } from './theme';
+import {
+  labelStyle,
+  neuroRaised,
+  useAudioTheme,
+  type AudioTheme,
+} from './theme';
 
 export interface EffectPanelProps {
   effect: Effect;
@@ -79,21 +84,19 @@ export function EffectPanel({
     isParamAvailable(effect.type, param.key);
 
   return (
-    <View
-      style={[
-        styles.panel,
-        { backgroundColor: theme.surface, borderRadius: theme.radius },
-      ]}
-    >
+    <View style={[styles.panel, neuroRaised(theme)]}>
       {showHeader ? (
         <View style={styles.header}>
           <View style={styles.headerText}>
-            <Text style={[styles.title, { color: theme.text }]}>
+            <Text
+              style={[
+                styles.title,
+                { color: theme.text, fontFamily: theme.fontFamily },
+              ]}
+            >
               {effect.descriptor.label}
             </Text>
-            <Text style={[styles.category, { color: theme.textMuted }]}>
-              {effect.descriptor.category}
-            </Text>
+            <Text style={labelStyle(theme)}>{effect.descriptor.category}</Text>
           </View>
 
           <View style={styles.headerActions}>
@@ -195,8 +198,8 @@ export function EffectRack({
 
 const styles = StyleSheet.create({
   panel: {
-    padding: 12,
-    gap: 12,
+    padding: 16,
+    gap: 14,
   },
   header: {
     flexDirection: 'row',
@@ -207,13 +210,9 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   title: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '600',
-  },
-  category: {
-    fontSize: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
+    letterSpacing: 0.2,
   },
   headerActions: {
     flexDirection: 'row',
@@ -226,7 +225,11 @@ const styles = StyleSheet.create({
   knobGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 14,
+    // Generous row spacing: each knob carries a value and a label beneath it,
+    // so a tight grid runs one knob's label into the next knob's dial.
+    columnGap: 16,
+    rowGap: 18,
+    marginTop: 4,
   },
   sliderStack: {
     gap: 10,

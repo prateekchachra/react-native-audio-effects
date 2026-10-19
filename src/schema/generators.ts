@@ -173,3 +173,67 @@ export function generatorDefaults(waveform: Waveform): Record<string, number> {
   }
   return values;
 }
+
+/**
+ * Amplitude envelope for a generator.
+ *
+ * A raw oscillator is a continuous tone; an envelope is what turns it into a
+ * note. Attack and decay shape the onset, sustain is the level a held note
+ * settles at, and release is the tail after the key comes up.
+ *
+ * This applies to generators rather than to the effect chain, because it is
+ * gated by note events rather than running continuously. On iOS it is
+ * AudioKit's `AmplitudeEnvelope`; on Android it is a state machine in the
+ * stream callback, since Klarinet has no envelope of its own.
+ */
+export const ENVELOPE_PARAMS: readonly ParamDescriptor[] = [
+  {
+    key: 'attack',
+    label: 'Attack',
+    min: 1,
+    max: 4000,
+    default: 10,
+    unit: 'ms',
+    taper: 'log',
+    description: 'Time from silence to full level when a note starts.',
+  },
+  {
+    key: 'decay',
+    label: 'Decay',
+    min: 1,
+    max: 4000,
+    default: 200,
+    unit: 'ms',
+    taper: 'log',
+    description: 'Time to fall from full level to the sustain level.',
+  },
+  {
+    key: 'sustain',
+    label: 'Sustain',
+    min: 0,
+    max: 1,
+    default: 0.7,
+    unit: '%',
+    taper: 'linear',
+    description: 'Level a held note settles at. Unlike the others, a level.',
+  },
+  {
+    key: 'release',
+    label: 'Release',
+    min: 1,
+    max: 8000,
+    default: 400,
+    unit: 'ms',
+    taper: 'log',
+    description: 'Time to fade to silence after the note is let go.',
+  },
+];
+
+/** Default envelope values, by parameter key. */
+export function envelopeDefaults(): Record<string, number> {
+  const values: Record<string, number> = {};
+  for (const param of ENVELOPE_PARAMS) {
+    values[param.key] = param.default;
+  }
+  return values;
+}

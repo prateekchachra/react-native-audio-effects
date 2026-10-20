@@ -15,6 +15,8 @@ enum AudioEffectsError: LocalizedError {
   case unknownEffect(String)
   case unknownWaveform(String)
   case fileNotFound(String)
+  /// A remote sample could not be fetched. Carries the URL and the reason.
+  case downloadFailed(String, String)
   case decodeFailed(String, underlying: Error?)
   case invalidChainOrder
   case engineFailed(Error)
@@ -28,6 +30,7 @@ enum AudioEffectsError: LocalizedError {
     case .unknownEffect: return "UNKNOWN_EFFECT"
     case .unknownWaveform: return "UNKNOWN_WAVEFORM"
     case .fileNotFound: return "FILE_NOT_FOUND"
+    case .downloadFailed: return "DOWNLOAD_FAILED"
     case .decodeFailed: return "DECODE_FAILED"
     case .invalidChainOrder: return "INVALID_CHAIN_ORDER"
     case .engineFailed: return "ENGINE_FAILED"
@@ -52,6 +55,8 @@ enum AudioEffectsError: LocalizedError {
       return "Unknown waveform '\(waveform)'."
     case let .fileNotFound(uri):
       return "Could not open an audio file at \(uri)."
+    case let .downloadFailed(url, reason):
+      return "Could not download \(url): \(reason)."
     case let .decodeFailed(uri, underlying):
       let reason = underlying?.localizedDescription ?? "unsupported format"
       return "Could not decode \(uri): \(reason)."

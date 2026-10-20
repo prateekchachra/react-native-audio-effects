@@ -1,89 +1,63 @@
-# LinkedIn post — draft
+# LinkedIn post — intro
 
-Pick whichever version fits. The first is the safe default.
+Short announcement. The deeper material (schema-driven design, the
+cross-platform capability problem, why three bugs produced silence instead of
+errors) is saved for the follow-up article.
 
 ---
 
-## Version A — the build story (recommended)
+## The post
 
-I rebuilt **react-native-audio-effects** from scratch, and shipped v2.
+Just shipped **react-native-audio-effects v2** 🎛
 
-The old version had a problem I only found by trying to install it: the
-podspec depended on CocoaPods packages that no longer exist. AudioKit stopped
-publishing there years ago. So the library imported AudioKit, declared a
-dependency that could never resolve, and simply would not compile in anyone's
-app. It also had no Android implementation at all.
+A complete rewrite on React Native's New Architecture, for anyone building
+music or audio apps:
 
-v2 is a rewrite on React Native's New Architecture:
-
-🎛 **17 effects** — delay, reverb, chorus, flanger, phaser, tremolo,
-compressor, limiter, noise gate, 4-band parametric EQ, filters, distortion,
+🎚 **17 real-time effects** — delay, reverb, chorus, flanger, phaser,
+tremolo, compressor, limiter, noise gate, parametric EQ, filters, distortion,
 bit crusher
 
-🎹 **7 generators** with ADSR envelopes and a playable MIDI keyboard
+🎹 **7 oscillators** with ADSR envelopes and a playable MIDI keyboard
 
-🎚 **A plugin-style control kit** — rotary knobs with proper tapers, XY pads,
-level meters, waveform scrubbing
+🎛 **Plugin-style controls** — rotary knobs, XY pads, level meters, waveform
+scrubbing. Drop in an effect and the whole UI panel builds itself.
 
-⚙️ **TurboModule** — Swift + AudioKit on iOS, Kotlin + Oboe on Android
+⚙️ Swift + AudioKit on iOS, Kotlin + Oboe on Android, behind a single
+TurboModule.
 
-The thing I'd actually tell another engineer about: there is **one TypeScript
-schema** that declares every parameter's range, curve, unit and per-platform
-availability. The native adapters read it, the UI generates itself from it,
-and a test parses both native registries and fails CI if either drifts. A
-knob cannot disagree with the DSP behind it, because they are the same
-declaration.
+```
+const source = await AudioEngine.loadFile(uri);
+const delay = await source.addEffect('delay');
+delay.set('time', 300);
+await source.play({ loop: true });
+```
 
-That mattered more than I expected. The two backends are genuinely different
-— Apple's EQ caps at ±20 dB where Android's reaches ±24, Klarinet's reverb
-has a stereo width control that AudioKit's has no equivalent for. Rather than
-quietly clamping, the narrower range wins and the extras are flagged per
-parameter and greyed out in the UI. Creating an effect a platform cannot do
-throws, instead of handing back a handle that silently does nothing.
+Apache-2.0 and open source. Writing up the architecture behind it soon —
+particularly how a single TypeScript schema keeps the controls, both native
+backends and the docs from ever drifting apart.
 
-Three bugs in this project produced **silence rather than an error**. Metering
-that only tapped sources existing when you enabled it. A tap installed before
-the chain was built, which left the player mute. An envelope whose gate the
-audio unit only samples once per render block, so a retrigger vanished.
+npm: react-native-audio-effects
 
-Typechecking catches none of that. What caught all three was a diagnostic
-harness that plays audio and measures the actual output level — a sine at
-amplitude 0.5 should read 0.354 RMS, and if it reads 0.000 something is
-wrong. 29 end-to-end checks, every one reporting a measured number.
-
-Apache-2.0, on npm. Links below. 👇
-
-#ReactNative #iOS #Android #AudioProgramming #DSP #Swift #Kotlin #OpenSource
+#ReactNative #iOS #Android #AudioProgramming #OpenSource
 
 ---
 
-## Version B — shorter
+## Before posting
 
-Shipped **react-native-audio-effects v2** — a full rewrite on React Native's
-New Architecture.
-
-17 real-time effects, 7 oscillators with ADSR and a playable keyboard, and a
-plugin-style control kit — knobs, XY pads, meters, waveform scrubbing.
-Swift + AudioKit on iOS, Kotlin + Oboe on Android, behind one TurboModule.
-
-The design decision I'd defend: one TypeScript schema declares every
-parameter's range, curve and per-platform support. The native adapters read
-it, the UI builds itself from it, and a CI test fails if either side drifts.
-A control cannot disagree with the DSP behind it.
-
-The lesson I'd pass on: three bugs here produced silence, not errors. No
-amount of typechecking finds those. What did was a harness that plays audio
-and asserts on the measured level — a 0.5-amplitude sine must read 0.354 RMS.
-
-Apache-2.0, open source. 🎛
-
-#ReactNative #AudioProgramming #DSP #OpenSource
+- A short screen recording of the knobs and keyboard will do more than any
+  screenshot.
+- Keep the claim accurate about which platforms you have verified at runtime
+  at the time you post.
 
 ---
 
-## Notes before posting
+## Saved for the article
 
-- A screen recording of the knobs and the keyboard will outperform any
-  screenshot here.
-- Say Android is iOS-verified and Android-compiled if that is still true when
-  you post — it is the kind of thing people find out and remember.
+- One schema driving the wire format, both native adapters and the UI, with a
+  CI test that parses the Swift and Kotlin registries and fails on drift.
+- Reconciling two unequal DSP backends: narrower range wins, extras flagged
+  per parameter, unavailable effects throw rather than no-op.
+- Three bugs that produced silence rather than errors, and the measurement
+  harness that caught all of them.
+- Why AudioKit needed Swift Package Manager through a CocoaPods podspec, and
+  why v1 could never have compiled.

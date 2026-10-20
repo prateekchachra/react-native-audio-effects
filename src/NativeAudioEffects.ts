@@ -151,6 +151,9 @@ export interface Spec extends TurboModule {
   /** Set source level as linear amplitude, 0..1. Synchronous. */
   setSourceVolume(sourceId: number, volume: number): void;
 
+  /** Stereo placement of a whole source. -1 hard left, 1 hard right. */
+  setSourcePan(sourceId: number, pan: number): void;
+
   /**
    * Set a generator parameter — `frequency` or `amplitude` — while it runs.
    *

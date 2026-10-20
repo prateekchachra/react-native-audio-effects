@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2a1f4d"/>
+      <stop offset="1" stop-color="#120e1c"/>
+    </linearGradient>
+    <linearGradient id="metal" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#cbb8ff"/>
+      <stop offset="1" stop-color="#7c5cff"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="114" fill="url(#bg)"/>
+
+  <!-- The mark, nudged up so the optical centre sits mid-tile: the cups
+       are visually heavier than the band, which pulls the eye downward. -->
+  <g transform="translate(0,-16)">
+  <!-- Headband: an arc sitting above the cups. -->
+  <path d="M 108 300 A 148 148 0 0 1 404 300"
+        fill="none" stroke="url(#metal)" stroke-width="30" stroke-linecap="round"/>
+
+  <!-- Earcups. -->
+  <rect x="80" y="286" width="62" height="124" rx="31" fill="url(#metal)"/>
+  <rect x="370" y="286" width="62" height="124" rx="31" fill="url(#metal)"/>
+
+  <!-- RN, sitting between the cups. -->
+  <text x="256" y="388" text-anchor="middle"
+        font-family="Avenir Next, Helvetica Neue, Helvetica, Arial, sans-serif"
+        font-size="132" font-weight="700" fill="#ece7f7" letter-spacing="2">RN</text>
+  </g>
+</svg>

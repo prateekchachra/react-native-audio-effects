@@ -64,6 +64,66 @@ enum FileImporter {
     )
   }
 
+  /// How long to wait for a remote sample before giving up.
+  private static let downloadTimeout: TimeInterval = 60
+
+  /**
+   Fetch a remote file into the cache.
+
+   Blocking on a semaphore rather than going async: `import` is already
+   called off the main thread from the TurboModule's promise, and making
+   the whole import path async to accommodate one branch would complicate
+   every local-file call for no benefit.
+   */
+  private static func download(_ url: URL, to destination: URL) throws {
+    var downloadError: Error?
+    var temporary: URL?
+    let semaphore = DispatchSemaphore(value: 0)
+
+    let task = URLSession.shared.downloadTask(with: url) { location, response, error in
+      defer { semaphore.signal() }
+      if let error {
+        downloadError = error
+        return
+      }
+      if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+        downloadError = AudioEffectsError.downloadFailed(
+          url.absoluteString, "HTTP \(http.statusCode)"
+        )
+        return
+      }
+      guard let location else {
+        downloadError = AudioEffectsError.downloadFailed(
+          url.absoluteString, "no data"
+        )
+        return
+      }
+      // The temporary file is deleted the moment this handler returns, so
+      // it has to be moved here rather than after the wait.
+      do {
+        try FileManager.default.moveItem(at: location, to: destination)
+        temporary = destination
+      } catch {
+        downloadError = error
+      }
+    }
+    task.resume()
+
+    if semaphore.wait(timeout: .now() + downloadTimeout) == .timedOut {
+      task.cancel()
+      throw AudioEffectsError.downloadFailed(url.absoluteString, "timed out")
+    }
+    if let downloadError {
+      throw downloadError as? AudioEffectsError
+        ?? AudioEffectsError.downloadFailed(
+          url.absoluteString, downloadError.localizedDescription
+        )
+    }
+    guard temporary != nil else {
+      throw AudioEffectsError.downloadFailed(url.absoluteString, "no file")
+    }
+  }
+
   static func `import`(uri: String) throws -> ImportedFile {
     guard let source = resolve(uri) else {
       throw AudioEffectsError.fileNotFound(uri)
@@ -81,7 +141,13 @@ enum FileImporter {
       .appendingPathComponent(UUID().uuidString + "-" + source.lastPathComponent)
 
     do {
-      try FileManager.default.copyItem(at: source, to: destination)
+      if source.scheme == "http" || source.scheme == "https" {
+        try download(source, to: destination)
+      } else {
+        try FileManager.default.copyItem(at: source, to: destination)
+      }
+    } catch let error as AudioEffectsError {
+      throw error
     } catch {
       throw AudioEffectsError.fileNotFound(uri)
     }

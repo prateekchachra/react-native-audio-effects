@@ -181,6 +181,10 @@ class AudioEffectsModule(reactContext: ReactApplicationContext) :
     backend.setSourceVolume(sourceId.toInt(), volume.toFloat())
   }
 
+  override fun setSourcePan(sourceId: Double, pan: Double) {
+    backend.setSourcePan(sourceId.toInt(), pan.toFloat())
+  }
+
   override fun setOscillatorParameter(sourceId: Double, key: String, value: Double) {
     backend.setOscillatorParameter(sourceId.toInt(), key, value.toFloat())
   }

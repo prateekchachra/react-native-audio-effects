@@ -17,6 +17,7 @@ import {
   EFFECTS,
   isEffectAvailable,
   type Effect,
+  type EffectLike,
   type EffectType,
   type Source,
 } from 'react-native-audio-effects';
@@ -74,17 +75,33 @@ export function StudioScreen() {
     }
   }, [load]);
 
-  const togglePlay = useCallback(async () => {
-    if (!source) {
+  /**
+   * Start or stop playback.
+   *
+   * Everything here can reject — the source may have been released by a
+   * load that landed between the render and the tap. An unhandled
+   * rejection out of an `onPress` is a redbox, so the transport has to
+   * swallow it into the status line instead.
+   *
+   * `isPlaying` is also corrected on failure rather than assumed: the
+   * button lying about the transport state is how you end up unable to
+   * start playback again without reloading.
+   */
+  const togglePlay = useCallback(() => {
+    if (!source || source.isReleased) {
       return;
     }
-    if (isPlaying) {
-      await source.pause();
-      setIsPlaying(false);
-    } else {
-      await source.play({ loop: true });
-      setIsPlaying(true);
-    }
+    const wasPlaying = isPlaying;
+    // Flip optimistically so the button responds on the same frame.
+    setIsPlaying(!wasPlaying);
+    const action = wasPlaying ? source.pause() : source.play({ loop: true });
+    action.catch((error: unknown) => {
+      setIsPlaying(wasPlaying);
+      setStatus(
+        `Could not ${wasPlaying ? 'pause' : 'play'}: ` +
+          (error instanceof Error ? error.message : String(error))
+      );
+    });
   }, [source, isPlaying]);
 
   const addEffect = useCallback(
@@ -103,12 +120,21 @@ export function StudioScreen() {
   );
 
   const removeEffect = useCallback(
-    async (effect: Effect) => {
+    (effect: EffectLike) => {
       if (!source) {
         return;
       }
-      await source.removeEffect(effect);
-      setEffects((previous) => previous.filter((e) => e !== effect));
+      // The rack hands back the interface, not the concrete effect; the
+      // chain is the authority on which instance that is.
+      const target = source.effects.find(
+        (candidate) => candidate.id === effect.id
+      );
+      if (!target) {
+        return;
+      }
+      source.removeEffect(target).then(() => {
+        setEffects((previous) => previous.filter((e) => e.id !== effect.id));
+      });
     },
     [source]
   );

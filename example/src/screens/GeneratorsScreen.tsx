@@ -5,204 +5,208 @@
  * engine, the effect chain and metering are all working.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
-  AudioEngine,
+  EFFECTS,
   ENVELOPE_PARAMS,
   GENERATORS,
-  SINE,
+  LFO,
+  PolySynth,
+  PresetStore,
   envelopeDefaults,
-  getEffect,
   getGenerator,
-  midiToFrequency,
+  isEffectAvailable,
   noteName,
-  type Effect,
   type EffectType,
-  type Source,
-  type Waveform,
+  type ParamDescriptor,
+  type PlayMode,
+  type VoiceStackEffect,
 } from 'react-native-audio-effects';
+import type { Waveform } from 'react-native-audio-effects';
 import {
   EffectRack,
   Keyboard,
   Knob,
-  LevelMeter,
+  LFOPanel,
+  PresetPanel,
   darkTheme,
 } from 'react-native-audio-effects/ui';
 
-import { useLiveLevels } from '../useLive';
+/**
+ * Unison controls are synth settings, not effect parameters, so they have
+ * no schema entry. These stand in so `Knob` keeps taking one kind of thing.
+ */
+const DETUNE_PARAM: ParamDescriptor = {
+  key: 'unisonSpread',
+  label: 'Detune',
+  min: 0,
+  max: 60,
+  default: 14,
+  unit: 'cents',
+  taper: 'linear',
+};
 
-/** Effects worth reaching for on a raw oscillator. */
-const QUICK_EFFECTS: EffectType[] = [
-  'lowPassFilter',
-  'delay',
-  'reverb',
-  'tremolo',
-  'distortion',
+const WIDTH_PARAM: ParamDescriptor = {
+  key: 'unisonPan',
+  label: 'Width',
+  min: 0,
+  max: 1,
+  default: 0.6,
+  unit: '%',
+  taper: 'linear',
+};
+
+/**
+ * One store for the screen.
+ *
+ * No storage is passed, so presets live for the session. Wiring
+ * AsyncStorage here is a one-liner and is what a real app would do.
+ */
+const presetStore = new PresetStore({ namespace: 'generators' });
+
+const MODES: Array<{ key: PlayMode; label: string; hint: string }> = [
+  {
+    key: 'poly',
+    label: 'Chord',
+    hint: 'Notes stack. Tap a held key to drop it.',
+  },
+  { key: 'mono', label: 'Mono', hint: 'One note; every note re-attacks.' },
+  {
+    key: 'legato',
+    label: 'Legato',
+    hint: 'One note; the envelope keeps running.',
+  },
+  {
+    key: 'portamento',
+    label: 'Porta',
+    hint: 'Legato, with the pitch gliding.',
+  },
 ];
 
-const FREQUENCY_PARAM = SINE.params[0]!;
-const AMPLITUDE_PARAM = SINE.params[1]!;
-
 export function GeneratorsScreen() {
-  const [waveform, setWaveform] = useState<Waveform>('sine');
-  const [source, setSource] = useState<Source>();
-  const [effects, setEffects] = useState<Effect[]>([]);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [frequency, setFrequency] = useState(220);
-  const [amplitude, setAmplitude] = useState(0.3);
-  /** The latched note, or undefined when nothing is sounding. */
-  const [activeNote, setActiveNote] = useState<number>();
-  /**
-   * Mirrors `activeNote` for the key handler.
-   *
-   * Two taps in quick succession can both run against the same render, so
-   * reading the state variable would make the second tap see a stale value
-   * and fail to toggle the note off.
-   */
-  const activeNoteRef = useRef<number | undefined>(undefined);
-  /** The stream runs continuously once started; notes are gated on top. */
-  const streamStarted = useRef(false);
+  const [waveform, setWaveform] = useState<Waveform>('sawtooth');
+  const [mode, setMode] = useState<PlayMode>('poly');
+  const [unison, setUnison] = useState(1);
+  const [detuneCents, setDetuneCents] = useState<number>(DETUNE_PARAM.default);
+  const [width, setWidth] = useState<number>(WIDTH_PARAM.default);
+  const [synth, setSynth] = useState<PolySynth>();
+  const [activeNotes, setActiveNotes] = useState<number[]>([]);
+  const [effects, setEffects] = useState<VoiceStackEffect[]>([]);
+  const [status, setStatus] = useState<string>();
   const [envelope, setEnvelope] =
     useState<Record<string, number>>(envelopeDefaults);
 
-  // Read inside the create effect without making it a dependency, which
-  // would rebuild the oscillator on every envelope tweak.
   const envelopeRef = useRef(envelope);
   envelopeRef.current = envelope;
 
-  const levels = useLiveLevels(source);
+  // Read when a synth is built, so turning either knob does not land in the
+  // rebuild effect's dependencies and tear the voice pool down mid-note.
+  const unisonRef = useRef({ spread: detuneCents, pan: width });
+  unisonRef.current = { spread: detuneCents, pan: width };
+
   const descriptor = getGenerator(waveform);
   const isPitched = descriptor?.pitched ?? false;
 
-  // Switching waveform replaces the native source, so the old one is released
-  // and the chain starts over.
+  // Rebuilt when the waveform, mode or unison count changes, since each
+  // determines how many native sources the pool needs.
   useEffect(() => {
     let cancelled = false;
-    let created: Source | undefined;
+    let created: PolySynth | undefined;
 
     (async () => {
-      created = await AudioEngine.createOscillator(waveform, {
-        frequency,
-        amplitude,
+      created = await PolySynth.create({
+        waveform,
+        mode,
+        unison,
+        unisonSpread: unisonRef.current.spread,
+        unisonPan: unisonRef.current.pan,
+        maxVoices: 6,
+        amplitude: 0.22,
       });
-      if (cancelled) {
-        await created.release();
-        return;
-      }
       for (const [key, value] of Object.entries(envelopeRef.current)) {
         created.setEnvelopeParam(
           key as 'attack' | 'decay' | 'sustain' | 'release',
           value
         );
       }
-      setSource(created);
+      if (cancelled) {
+        await created.dispose();
+        return;
+      }
+      setSynth(created);
+      setActiveNotes([]);
+      // Effects belong to the old pool's sources, which are being released.
       setEffects([]);
-      setIsPlaying(false);
-      setActiveNote(undefined);
-      activeNoteRef.current = undefined;
-      streamStarted.current = false;
     })();
 
     return () => {
       cancelled = true;
-      created?.release().catch(() => {});
-      setSource(undefined);
+      created?.dispose().catch(() => {});
+      setSynth(undefined);
     };
-    // Frequency and amplitude are applied live below, not by recreating.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [waveform]);
-
-  const toggle = useCallback(async () => {
-    if (!source) {
-      return;
-    }
-    if (isPlaying) {
-      await source.stop();
-      streamStarted.current = false;
-      activeNoteRef.current = undefined;
-      setActiveNote(undefined);
-      setIsPlaying(false);
-    } else {
-      await source.play({ loop: true });
-      streamStarted.current = true;
-      setIsPlaying(true);
-    }
-  }, [source, isPlaying]);
+  }, [waveform, mode, unison]);
 
   /**
-   * Latching, monophonic keyboard.
+   * One LFO for the screen, driven by its own panel.
    *
-   * Tapping a key starts it and leaves it sounding; tapping the same key
-   * again stops it; tapping a different key replaces whatever was playing.
-   * Hold-to-sound is wrong on a touchscreen — your finger covers the key you
-   * are trying to hear, and you cannot sustain a note while reaching for a
-   * knob.
-   *
-   * The stream itself runs continuously once started. Notes are the envelope
-   * gate opening and closing on top of it, so there is no click or restart
-   * latency per key.
+   * Built once and kept, rather than recreated whenever the patch changes:
+   * the panel holds the assignment, and rebuilding the LFO underneath it
+   * would silently drop whatever the user had pointed it at.
    */
+  const lfo = useMemo(
+    () => new LFO({ rate: 1.2, shape: 'sine', depth: 0.9 }),
+    []
+  );
+
   const noteOn = useCallback(
-    async (midi: number) => {
-      if (!source) {
+    (midi: number) => {
+      if (!synth) {
         return;
       }
-
-      // Same key again: stop and let it ring out.
-      if (activeNoteRef.current === midi) {
-        source.gate(false);
-        activeNoteRef.current = undefined;
-        setActiveNote(undefined);
-        setIsPlaying(false);
-        return;
-      }
-
-      const hz = midiToFrequency(midi);
-      setFrequency(hz);
-      source.setOscillatorParam('frequency', hz);
-
-      if (!streamStarted.current) {
-        await source.play({ loop: true });
-        streamStarted.current = true;
-      }
-
-      // A second note-on retriggers the envelope natively — the backend
-      // knows the gate is already open and gives the close a render block
-      // to land before reopening.
-      source.gate(true);
-
-      activeNoteRef.current = midi;
-      setActiveNote(midi);
-      setIsPlaying(true);
+      synth.noteOn(midi);
+      setActiveNotes(synth.activeNotes);
     },
-    [source]
+    [synth]
+  );
+
+  const addEffect = useCallback(
+    async (type: EffectType) => {
+      if (!synth) {
+        return;
+      }
+      try {
+        const stack = await synth.addEffect(type);
+        setEffects((previous) => [...previous, stack]);
+        setStatus(undefined);
+      } catch (error) {
+        setStatus((error as Error).message);
+      }
+    },
+    [synth]
+  );
+
+  const removeEffect = useCallback(
+    (stack: VoiceStackEffect) => {
+      if (!synth) {
+        return;
+      }
+      synth.removeEffect(stack).then(() => {
+        setEffects((previous) => previous.filter((e) => e.id !== stack.id));
+      });
+    },
+    [synth]
   );
 
   const setEnvelopeParam = useCallback(
     (key: string, value: number) => {
       setEnvelope((previous) => ({ ...previous, [key]: value }));
-      source?.setEnvelopeParam(
+      synth?.setEnvelopeParam(
         key as 'attack' | 'decay' | 'sustain' | 'release',
         value
       );
     },
-    [source]
-  );
-
-  const addEffect = useCallback(
-    async (type: EffectType) => {
-      if (!source) {
-        return;
-      }
-      try {
-        const effect = await source.addEffect(type);
-        setEffects((previous) => [...previous, effect]);
-      } catch {
-        // Unavailable on this platform; the chip is disabled anyway.
-      }
-    },
-    [source]
+    [synth]
   );
 
   return (
@@ -235,107 +239,154 @@ export function GeneratorsScreen() {
         <Text style={styles.description}>{descriptor.description}</Text>
       ) : null}
 
-      <View style={styles.controls}>
-        {isPitched ? (
-          <Knob
-            param={FREQUENCY_PARAM}
-            value={frequency}
-            onChange={(value) => {
-              setFrequency(value);
-              source?.setOscillatorParam('frequency', value);
-            }}
-            size={72}
-          />
-        ) : null}
-        <Knob
-          param={AMPLITUDE_PARAM}
-          value={amplitude}
-          onChange={(value) => {
-            setAmplitude(value);
-            source?.setOscillatorParam('amplitude', value);
-          }}
-          size={72}
-          label="Level"
-        />
-        <View style={styles.meters}>
-          <LevelMeter peak={levels.peakLeft} rms={levels.rmsLeft} length={72} />
-          <LevelMeter
-            peak={levels.peakRight}
-            rms={levels.rmsRight}
-            length={72}
-          />
-        </View>
-      </View>
-
-      {/* Noise has no notes to press, so it keeps a transport button.
-          Pitched sources are played from the keyboard instead. */}
-      {!isPitched ? (
-        <Pressable
-          onPress={toggle}
-          style={({ pressed }) => [
-            styles.button,
-            isPlaying && styles.buttonActive,
-            pressed && styles.buttonPressed,
-          ]}
-        >
-          <Text style={styles.buttonText}>{isPlaying ? 'Stop' : 'Play'}</Text>
-        </Pressable>
-      ) : null}
-
-      {isPitched ? (
-        <>
-          <Text style={styles.subheading}>Envelope</Text>
-          <View style={styles.adsrRow}>
-            {ENVELOPE_PARAMS.map((param) => (
-              <Knob
-                key={param.key}
-                param={param}
-                value={envelope[param.key] ?? param.default}
-                onChange={(value) => setEnvelopeParam(param.key, value)}
-                size={60}
-              />
-            ))}
-          </View>
-
-          <View style={styles.keyboardHeader}>
-            <Text style={styles.subheading}>Keyboard</Text>
-            <Text style={styles.noteReadout}>
-              {activeNote !== undefined ? noteName(activeNote) : '--'}
-            </Text>
-          </View>
-          {/* No onNoteOff: keys latch, so lifting a finger leaves the note
-              sounding until it or another key is tapped. */}
-          <Keyboard
-            startOctave={3}
-            octaves={2}
-            onNoteOn={noteOn}
-            activeNotes={activeNote !== undefined ? [activeNote] : []}
-          />
-        </>
-      ) : null}
-
-      <Text style={styles.subheading}>Add an effect</Text>
+      <Text style={styles.subheading}>Mode</Text>
       <View style={styles.chips}>
-        {QUICK_EFFECTS.map((type) => (
+        {MODES.map((entry) => (
           <Pressable
-            key={type}
-            onPress={() => addEffect(type)}
-            style={styles.chip}
+            key={entry.key}
+            onPress={() => setMode(entry.key)}
+            style={[styles.chip, mode === entry.key && styles.chipActive]}
           >
-            <Text style={styles.chipText}>
-              {getEffect(type)?.label ?? type}
+            <Text
+              style={[
+                styles.chipText,
+                mode === entry.key && styles.chipTextActive,
+              ]}
+            >
+              {entry.label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+      <Text style={styles.hintLine}>
+        {MODES.find((entry) => entry.key === mode)?.hint}
+      </Text>
+
+      <Text style={styles.subheading}>Unison</Text>
+      <View style={styles.chips}>
+        {[1, 2, 3, 5].map((count) => (
+          <Pressable
+            key={count}
+            onPress={() => setUnison(count)}
+            style={[styles.chip, unison === count && styles.chipActive]}
+          >
+            <Text
+              style={[
+                styles.chipText,
+                unison === count && styles.chipTextActive,
+              ]}
+            >
+              {count === 1 ? 'Off' : `${count}x`}
             </Text>
           </Pressable>
         ))}
       </View>
 
-      <EffectRack
-        effects={effects}
-        onRemove={async (effect) => {
-          await source?.removeEffect(effect);
-          setEffects((previous) => previous.filter((e) => e !== effect));
-        }}
-      />
+      {unison > 1 ? (
+        <>
+          <Text style={styles.hintLine}>
+            Detune spreads the stack in pitch; width spreads it across the
+            stereo field. Detune alone just beats in the middle — the two
+            together are what make a stack sound large.
+          </Text>
+          <View style={styles.adsrRow}>
+            <Knob
+              param={DETUNE_PARAM}
+              value={detuneCents}
+              onChange={(value) => {
+                setDetuneCents(value);
+                synth?.setUnisonSpread(value);
+              }}
+              size={60}
+            />
+            <Knob
+              param={WIDTH_PARAM}
+              value={width}
+              onChange={(value) => {
+                setWidth(value);
+                synth?.setUnisonPan(value);
+              }}
+              size={60}
+            />
+          </View>
+        </>
+      ) : null}
+
+      <Text style={styles.subheading}>Modulation</Text>
+      <View style={styles.panel}>
+        <LFOPanel
+          // Remounting on a rebuild drops an assignment that now points at
+          // effects which no longer exist.
+          key={`${waveform}:${mode}:${unison}`}
+          lfo={lfo}
+          targets={effects}
+          theme={darkTheme}
+        />
+      </View>
+
+      <Text style={styles.subheading}>Envelope</Text>
+      <View style={styles.adsrRow}>
+        {ENVELOPE_PARAMS.map((param) => (
+          <Knob
+            key={param.key}
+            param={param}
+            value={envelope[param.key] ?? param.default}
+            onChange={(value) => setEnvelopeParam(param.key, value)}
+            size={60}
+          />
+        ))}
+      </View>
+
+      {isPitched ? (
+        <>
+          <View style={styles.keyboardHeader}>
+            <Text style={styles.subheading}>Keyboard</Text>
+            <Text style={styles.noteReadout}>
+              {activeNotes.length > 0
+                ? activeNotes.map(noteName).join(' ')
+                : '--'}
+            </Text>
+          </View>
+          <Keyboard fullRange onNoteOn={noteOn} activeNotes={activeNotes} />
+        </>
+      ) : (
+        <Text style={styles.hintLine}>
+          Noise has no pitch, so the keyboard is hidden. Pick a pitched waveform
+          to play notes.
+        </Text>
+      )}
+
+      <Text style={styles.subheading}>Add an effect</Text>
+      {status ? <Text style={styles.hintLine}>{status}</Text> : null}
+      <View style={styles.chips}>
+        {EFFECTS.map((descriptor) => {
+          const available = isEffectAvailable(descriptor.type);
+          return (
+            <Pressable
+              key={descriptor.type}
+              disabled={!available || !synth}
+              onPress={() => addEffect(descriptor.type)}
+              style={[styles.chip, !available && styles.chipDisabled]}
+            >
+              <Text
+                style={[styles.chipText, !available && styles.chipTextDisabled]}
+              >
+                {descriptor.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      <Text style={styles.subheading}>
+        Chain {effects.length > 0 ? `(${effects.length})` : ''}
+      </Text>
+      <EffectRack effects={effects} onRemove={removeEffect as never} />
+
+      <Text style={styles.subheading}>Presets</Text>
+      <View style={styles.panel}>
+        <PresetPanel store={presetStore} chain={effects} theme={darkTheme} />
+      </View>
     </ScrollView>
   );
 }
@@ -372,11 +423,21 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginBottom: 10,
   },
+  /** Wrapper for the kit's own panels, which bring their own padding. */
+  panel: {
+    marginTop: 2,
+  },
   adsrRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginTop: 6,
     marginBottom: 4,
+  },
+  hintLine: {
+    color: darkTheme.textMuted,
+    fontSize: 11.5,
+    fontFamily: darkTheme.fontFamily,
+    fontStyle: 'italic',
   },
   keyboardHeader: {
     flexDirection: 'row',
@@ -419,6 +480,12 @@ const styles = StyleSheet.create({
   chipActive: {
     backgroundColor: darkTheme.accent,
     borderColor: darkTheme.accent,
+  },
+  chipDisabled: {
+    opacity: 0.4,
+  },
+  chipTextDisabled: {
+    color: darkTheme.disabled,
   },
   chipText: {
     color: darkTheme.text,

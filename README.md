@@ -1,3 +1,5 @@
+<img src="assets/logo.svg" alt="react-native-audio-effects" width="420">
+
 # react-native-audio-effects
 
 Real-time audio effects, generators and plugin-style controls for React
@@ -17,6 +19,8 @@ so a knob can never disagree with the effect behind it.
   compare, and an effect rack that builds itself from the schema.
 - **TurboModule** on RN 0.88, Swift + AudioKit on iOS, Kotlin + Klarinet
   (Oboe) on Android.
+
+**[Full API reference →](docs/API.md)**
 
 ## Install
 
@@ -140,16 +144,80 @@ sequencer without translation.
 import { midiToFrequency, noteName } from 'react-native-audio-effects';
 import { Keyboard } from 'react-native-audio-effects/ui';
 
+// Two octaves, hold-to-sound.
 <Keyboard
   startOctave={3}
   octaves={2}
   onNoteOn={(midi) => osc.setOscillatorParam('frequency', midiToFrequency(midi))}
   onNoteOff={() => osc.stop()}
 />;
+
+// All 88 keys, scrolling, latching. Drive the highlight yourself.
+<Keyboard
+  fullRange
+  onNoteOn={play}
+  activeNotes={note !== undefined ? [note] : []}
+/>;
 ```
 
 `midiToFrequency` takes a tuning reference, so `midiToFrequency(69, 432)`
 works if you need something other than A440.
+
+### Modes, chords and unison
+
+`PolySynth` turns the generators into a playable instrument. Polyphony is a
+pool of generator sources rather than a native voice pool — the engine
+already mixes any number of sources, so chords work today without touching
+Swift or Kotlin.
+
+```ts
+const synth = await PolySynth.create({
+  waveform: 'sawtooth',
+  mode: 'poly',       // 'poly' | 'mono' | 'legato' | 'portamento'
+  maxVoices: 8,
+  unison: 3,          // oscillators stacked per note
+  unisonSpread: 14,   // total detune across the stack, in cents
+  glideMs: 120,       // portamento glide time
+});
+
+synth.noteOn(60);     // C4
+synth.noteOn(64);     // stacks in poly; replaces the note in the mono modes
+synth.noteOff(60);
+synth.activeNotes;    // drive a Keyboard's highlight from this
+```
+
+| Mode | Behaviour |
+| --- | --- |
+| `poly` | Notes stack into chords. Re-pressing a sounding note releases it, so a touchscreen can build and unbuild a chord by tapping. Steals the oldest voice when the pool runs out. |
+| `mono` | One note at a time; every note re-attacks the envelope. |
+| `legato` | One note at a time; pitch changes but the envelope keeps running, so a phrase played without gaps swells once. |
+| `portamento` | Legato, with the pitch gliding. Interpolated in log space, because a glide that is linear in hertz sounds like it rushes the top of the interval. |
+
+> **`poly` and `unison` are not working yet on iOS.** They allocate several
+> sources at once, and that runs into the same unresolved graph-mutation bug
+> that affects effect chains — measured silent, where `mono`, `legato` and
+> `portamento` all measure 0.117 RMS. Tracked with the chain bug; both are
+> almost certainly the same root cause.
+
+### LFO
+
+Several effects have their own internal LFO, but each is wired to one fixed
+destination. `LFO` drives *any* parameter.
+
+```ts
+const lfo = new LFO({ rate: 0.8, shape: 'sine', depth: 0.9 });
+lfo.addParam(filter, 'cutoff', { min: 180, max: 9000 });
+lfo.start();
+```
+
+Bounds default to the parameter's own range from the schema, so
+`lfo.addParam(filter, 'cutoff')` sweeps the whole filter. Shapes are sine,
+triangle, square, sawtooth and random (sample-and-hold).
+
+It runs on a timer rather than in the DSP: parameter writes are synchronous
+JSI calls, so 60 Hz costs nothing, and an LFO moves slowly by definition. It
+is not a substitute for audio-rate modulation — that is why chorus and
+phaser keep their internal oscillators.
 
 ### Envelopes
 
@@ -319,7 +387,7 @@ Pitch: `midiToFrequency`, `frequencyToMidi`, `noteName`, `isBlackKey`,
 | `<XYPad>` | Two parameters at once, written as one atomic batch. |
 | `<LevelMeter>` | Peak and RMS on a decibel scale, with peak hold. |
 | `<WaveformView>` | Waveform, playhead and scrub-to-seek. |
-| `<Keyboard>` | MIDI keyboard. Latches by default; pass `onNoteOff` to hold. |
+| `<Keyboard>` | MIDI keyboard. `fullRange` gives all 88 keys with horizontal scrolling. Latches by default; pass `onNoteOff` to hold. |
 | `<PresetBar>` | Preset chips with A/B compare. |
 | `ThemeProvider`, `darkTheme`, `lightTheme`, `useAudioTheme` | Theming. |
 | `neuroRaised`, `neuroInner`, `neuroInset`, `labelStyle`, `readoutStyle` | Style helpers for building matching controls. |
@@ -406,3 +474,86 @@ Delay time is now **milliseconds** (it was seconds), and mix/feedback are
 ## License
 
 Apache-2.0
+
+## Sample Agent
+
+Ask for a sound in plain English and get one back, loaded into the engine:
+
+```ts
+import { SampleAgent } from 'react-native-audio-effects';
+
+const agent = new SampleAgent();
+const { source, attribution } = await agent.fetch('a gritty 90bpm lofi drum loop');
+await source.play({ loop: true });
+```
+
+It searches [Openverse](https://openverse.org), which **needs no API key** —
+openly licensed audio from Freesound and other providers, working on a fresh
+install with nothing configured. Splice has no public API, and Freesound's own
+API requires a registered token, so Openverse is the only source that lets this
+feature work out of the box.
+
+`find()` returns the results and what the agent understood, if you want to
+present a list rather than take the top hit:
+
+```ts
+const { query, results } = await agent.find('warm analog pad in F#m');
+query.understood; // { key: 'F#m', terms: 'warm analog pad' }
+```
+
+### Licensing
+
+Most results are CC-BY, where crediting the creator is a licence condition
+rather than a courtesy. Every result carries its licence and creator, and
+`attributionFor(result)` formats a usable credit line. Pass
+`publicDomainOnly: true` to restrict to CC0 and public domain works, which
+carry no attribution requirement.
+
+### Using a language model
+
+The built-in request parser is a vocabulary and a handful of regexes — instant,
+free, offline, and right about tempo, key, duration and loop-vs-one-shot. Swap
+in a model if you want better handling of phrasing it has no entry for:
+
+```ts
+new SampleAgent({
+  interpret: async (prompt) => {
+    const reply = await myModel(prompt);
+    return { terms: reply.terms, bpm: reply.bpm, understood: {} };
+  },
+});
+```
+
+It is a hook rather than a dependency because every free model needs an API
+key, and the feature has to work without one.
+
+### Remote files generally
+
+`AudioEngine.loadFile()` accepts `http(s)` URLs directly — the native importer
+downloads into the same cache a picked document uses, so a sample from the
+network behaves exactly like one off disk.
+
+## Presets
+
+`PresetStore` saves a whole chain: which effects are present, in what order,
+their parameter values, and whether each is bypassed.
+
+```ts
+import { PresetStore } from 'react-native-audio-effects';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const presets = new PresetStore({ storage: AsyncStorage });
+await presets.save('Dub Plate', chain);
+const skipped = await presets.apply('Dub Plate', chain);
+```
+
+Storage is injected rather than depended on, so the library does not force
+AsyncStorage on consumers who keep presets on a server or nowhere at all. The
+default is in-memory.
+
+Recall matches by position and type, and returns the indices it could not fill
+rather than writing values into the wrong effect — `mix` on a reverb and `mix`
+on a distortion are not the same control.
+
+The `<PresetPanel>` component wires this to a UI. `<PresetBar>` is the separate,
+session-only A/B comparison workflow.

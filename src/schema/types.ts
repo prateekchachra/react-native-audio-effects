@@ -30,7 +30,18 @@ export type Taper = 'linear' | 'log' | 'exp' | 'stepped';
  * the bridge — native adapters convert to whatever their backend wants.
  */
 export type ParamUnit =
-  'ms' | 's' | 'Hz' | 'dB' | '%' | 'x' | ':1' | 'oct' | 'bit' | '';
+  | 'ms'
+  | 's'
+  | 'Hz'
+  | 'dB'
+  | '%'
+  | 'x'
+  | ':1'
+  | 'oct'
+  /** Hundredths of a semitone. Detune and fine tuning. */
+  | 'cents'
+  | 'bit'
+  | '';
 
 export type EffectCategory =
   'dynamics' | 'time' | 'modulation' | 'filter' | 'distortion' | 'utility';

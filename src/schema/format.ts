@@ -18,6 +18,7 @@ const DEFAULT_PRECISION: Record<ParamUnit, number> = {
   'x': 2,
   ':1': 1,
   'oct': 2,
+  'cents': 0,
   'bit': 0,
   '': 2,
 };
@@ -69,6 +70,12 @@ export function formatValue(param: ParamDescriptor, value: number): string {
     case ':1':
       return `${round(value, precision)}:1`;
 
+    case 'cents': {
+      // Signed, because -12 and +12 cents are different places and an
+      // unsigned readout would make a symmetric unison spread unreadable.
+      const sign = value > 0 ? '+' : '';
+      return `${sign}${round(value, precision)} ct`;
+    }
     case 'oct':
       return `${round(value, precision)} oct`;
 

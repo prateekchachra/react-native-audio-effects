@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 150" width="560" height="150" role="img" aria-label="react-native-audio-effects">
+  <defs>
+    <linearGradient id="metal" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#b49bff"/>
+      <stop offset="1" stop-color="#7c5cff"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Mark: the same headphones as the app icon, without the tile. -->
+  <g transform="translate(8,14)">
+    <path d="M 20 76 A 44 44 0 0 1 108 76"
+          fill="none" stroke="url(#metal)" stroke-width="11" stroke-linecap="round"/>
+    <rect x="12" y="70" width="19" height="42" rx="9.5" fill="url(#metal)"/>
+    <rect x="97" y="70" width="19" height="42" rx="9.5" fill="url(#metal)"/>
+    <text x="64" y="104" text-anchor="middle"
+          font-family="Avenir Next, Helvetica Neue, Helvetica, Arial, sans-serif"
+          font-size="42" font-weight="700" fill="currentColor">RN</text>
+  </g>
+
+  <!-- Wordmark. `currentColor` so it reads on a light or dark README. -->
+  <g font-family="Avenir Next, Helvetica Neue, Helvetica, Arial, sans-serif">
+    <text x="146" y="74" font-size="33" font-weight="700" fill="currentColor"
+          letter-spacing="-0.4">audio-effects</text>
+    <text x="147" y="104" font-size="15" font-weight="500" fill="#8d84a8"
+          letter-spacing="2.6">REACT NATIVE · NEW ARCH</text>
+  </g>
+</svg>

@@ -58,17 +58,56 @@ final class EffectSlot {
 final class SourceGraph {
   let id: Int
 
-  /// Player for file sources; nil for generators.
-  let player: AudioPlayer?
+  /**
+   Player for file sources; nil for generators.
+
+   Replaced on every structural change. `AudioPlayer` does not survive
+   having its downstream rewired — it keeps running but renders silence
+   from then on, permanently, which is what made adding or removing an
+   effect kill a file source. Rather than nurse it back, each rebuild gets
+   a fresh player loaded from the same cached file, with position and
+   transport carried across.
+   */
+  private(set) var player: AudioPlayer?
   /// Generator for oscillator sources; nil for files.
   let generator: GeneratorNode?
   /// Cached copy of an imported file, removed when the source is released.
   let fileURL: URL?
+  /// Kept so the player can be re-primed after the graph is rewired.
+  private let file: AVAudioFile?
   let durationSec: Double
 
   /// Stable node the root mixer listens to, so the chain can be rebuilt
   /// underneath without touching the engine's output wiring.
   let output = Mixer()
+
+  /**
+   A fixed metering point between the chain and the engine.
+
+   `output`'s inputs change on every structural edit, and an `AmplitudeTap`
+   on a node whose connections change stops updating — it keeps returning
+   its last reading forever, which looks exactly like the audio having
+   died. This node sits downstream of `output` and is wired once, so the
+   tap on it stays live no matter how the chain is rebuilt.
+
+   It is also what the root mixer listens to, not `output`.
+   */
+  private(set) var meter: Fader!
+
+  /**
+   A permanent first link, between the source and the effect chain.
+
+   The source is connected to this once, at construction, and never
+   rewired. Without it the chain's first node is the player itself, so
+   every add or remove reconnected the player — and an `AudioPlayer` whose
+   output connection changes keeps running while rendering silence, for
+   good. Anchoring the head here means structural edits only ever touch
+   nodes downstream of it.
+
+   It also gives `setSourceVolume` somewhere honest to write, instead of
+   the output mixer that the meter tap reads.
+   */
+  private(set) var head: Fader!
 
   /**
    ADSR envelope, for generators only.
@@ -93,32 +132,79 @@ final class SourceGraph {
   /// apart from the first and retriggered.
   private(set) var isGateOpen = false
 
+  /**
+   Place the source in the stereo field. -1 hard left, 1 hard right.
+
+   A property on the existing output mixer, not a node. Inserting a
+   `Panner` between the chain and the meter crashed every structural
+   edit, and anything that changes the shape of this graph has a history
+   of silencing it. `Mixer` already conforms to AVAudioMixing, so this
+   costs nothing and cannot affect the topology.
+   */
+  func setPan(_ value: Float) {
+    output.pan = max(-1, min(1, value))
+  }
+
   private(set) var slots: [EffectSlot] = []
   private var amplitudeTap: AmplitudeTap?
 
-  var head: Node {
-    if let player { return player }
+  /**
+   The engine, so a rebuild can detach the nodes it replaces.
+
+   Without this the previous rebuild's effect nodes stay attached and keep
+   their connection to the source. AVAudioEngine allows one output
+   connection per bus, so the orphans block the new chain from connecting
+   and the source goes silent — permanently, since every later rebuild
+   leaves more orphans behind.
+   */
+  private weak var engine: AudioEngine?
+
+  /// Effect nodes created by the last rebuild, awaiting detachment.
+  private var builtNodes: [Node] = []
+
+  /// The node currently feeding `output`, so it can be swapped rather than
+  /// cleared.
+  private var currentTail: Node?
+
+  /// What feeds `head`: the generator's envelope where there is one,
+  /// otherwise the source itself. Used only at construction.
+  var sourceNode: Node {
     if let envelope { return envelope }
+    if let player { return player as Node }
     if let generator { return generator.node }
     fatalError("A source must have either a player or a generator")
   }
 
-  init(id: Int, player: AudioPlayer, fileURL: URL, durationSec: Double) {
+  init(
+    id: Int,
+    player: AudioPlayer,
+    fileURL: URL,
+    durationSec: Double,
+    engine: AudioEngine
+  ) {
     self.id = id
     self.player = player
     self.generator = nil
     self.fileURL = fileURL
     self.durationSec = durationSec
+    self.engine = engine
+    self.file = player.file
+    self.head = Fader(player, gain: 1)
+    self.meter = Fader(output, gain: 1)
     rebuild()
   }
 
-  init(id: Int, generator: GeneratorNode) {
+  init(id: Int, generator: GeneratorNode, engine: AudioEngine) {
     self.id = id
     self.player = nil
     self.generator = generator
     self.fileURL = nil
     self.durationSec = 0
+    self.engine = engine
+    self.file = nil
     self.envelope = AmplitudeEnvelope(generator.node)
+    self.head = Fader(self.envelope!, gain: 1)
+    self.meter = Fader(output, gain: 1)
     rebuild()
   }
 
@@ -191,14 +277,19 @@ final class SourceGraph {
 
   /// Recreate every effect node in order and reconnect the chain.
   private func rebuild() {
-    // A tap attached to `output` does not survive its inputs being swapped —
-    // the graph keeps rendering silence afterwards. Detach around the rebuild
-    // and restore it, so enabling metering before building a chain behaves
-    // the same as enabling it after.
-    let wasMetering = amplitudeTap != nil
-    if wasMetering {
-      stopMetering()
-    }
+    // The tap is deliberately left attached. `output` is the same Mixer
+    // object across every rebuild, so the tap stays valid — and tearing it
+    // down and reinstalling it here is what made every measurement after a
+    // chain change read zero, which looked like the audio had died when it
+    // was only the meter.
+
+    // Build the new chain first, then swap it in. Letting `output` drop to
+    // zero inputs collapses its render chain and it never recovers — the
+    // same failure the root mixer has, and the reason removing an effect
+    // used to silence the source permanently.
+    let previousTail = currentTail
+    let previousNodes = builtNodes
+    builtNodes = []
 
     var current: Node = head
     for slot in slots {
@@ -207,15 +298,27 @@ final class SourceGraph {
       }
       slot.node = node
       slot.reapply()
+      builtNodes.append(node.outputNode)
       current = node.outputNode
     }
 
-    output.removeAllInputs()
+    // Add before removing: letting `output` drop to zero inputs collapses
+    // its render chain and it does not recover.
     output.addInput(current)
-
-    if wasMetering {
-      startMetering()
+    if let previousTail, previousTail !== current {
+      output.removeInput(previousTail)
     }
+    currentTail = current
+
+    // Only now are the replaced nodes safe to detach: they are out of the
+    // live chain, and their stale connections to the source would otherwise
+    // block the new one.
+    if let avEngine = engine?.avEngine {
+      for node in previousNodes where !builtNodes.contains(where: { $0 === node }) {
+        avEngine.detach(node.avAudioNode)
+      }
+    }
+
   }
 
   // MARK: - Metering
@@ -228,7 +331,7 @@ final class SourceGraph {
    */
   func startMetering() {
     guard amplitudeTap == nil else { return }
-    let tap = AmplitudeTap(output)
+    let tap = AmplitudeTap(meter)
     // Keep the channels independent so a hard-panned source does not read as
     // half level on both sides of the meter.
     tap.stereoMode = .stereo
@@ -268,6 +371,12 @@ final class SourceGraph {
 
   func teardown() {
     stopMetering()
+    if let avEngine = engine?.avEngine {
+      for node in builtNodes {
+        avEngine.detach(node.avAudioNode)
+      }
+    }
+    builtNodes.removeAll()
     player?.stop()
     generator?.stop()
     output.removeAllInputs()

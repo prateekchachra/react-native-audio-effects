@@ -43,6 +43,9 @@ internal interface AudioBackend {
   fun stopSource(sourceId: Int)
   fun seek(sourceId: Int, positionSec: Double)
   fun setSourceVolume(sourceId: Int, volume: Float)
+
+  /** Stereo placement of a whole source. -1 hard left, 1 hard right. */
+  fun setSourcePan(sourceId: Int, pan: Float)
   fun setOscillatorParameter(sourceId: Int, key: String, value: Float)
 
   /** ADSR parameter on a generator. Times in ms, sustain a 0..1 level. */

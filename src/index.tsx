@@ -34,3 +34,20 @@ export type {
   ParameterChange,
   ProgressEvent,
 } from './NativeAudioEffects';
+
+export {
+  SampleAgent,
+  attributionFor,
+  buildSearchParams,
+  parseSampleRequest,
+  search,
+  SEARCH_BUDGET_MS,
+} from './samples';
+export type {
+  LoadedSample,
+  SampleAgentOptions,
+  SampleQuery,
+  SampleResult,
+  SampleSearch,
+  SearchOptions,
+} from './samples';

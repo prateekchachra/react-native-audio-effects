@@ -34,8 +34,14 @@ internal class FileImporter(private val context: Context) {
     /** Formats Klarinet's own reader handles without a transcode. */
     private val NATIVE_FORMATS = setOf("wav", "wave")
 
+    /** Handled by rewriting the container rather than by the platform codec. */
+    private val AIFF_FORMATS = setOf("aif", "aiff", "aifc")
+
     /** Buckets in the waveform peak array, matching the iOS importer. */
     const val PEAK_BUCKET_COUNT = 1000
+
+    /** How long to wait on a remote sample before giving up. */
+    private const val DOWNLOAD_TIMEOUT_MS = 60_000
   }
 
   data class ImportedFile(
@@ -55,12 +61,43 @@ internal class FileImporter(private val context: Context) {
     File(context.cacheDir, CACHE_DIR).apply { mkdirs() }
 
   /** Copy whatever the URI points at into our cache, returning the file. */
+  /**
+   * Open a stream to a remote file.
+   *
+   * Blocking, like the rest of the importer: this runs on the module's
+   * worker thread and the caller is already awaiting a promise.
+   */
+  private fun openRemote(uri: String): java.io.InputStream {
+    val connection = (java.net.URL(uri).openConnection() as java.net.HttpURLConnection)
+      .apply {
+        connectTimeout = DOWNLOAD_TIMEOUT_MS
+        readTimeout = DOWNLOAD_TIMEOUT_MS
+        // Redirects are the norm for CDN-hosted audio.
+        instanceFollowRedirects = true
+      }
+    val status = try {
+      connection.responseCode
+    } catch (error: Exception) {
+      connection.disconnect()
+      throw AudioEffectsException.DownloadFailed(uri, "unreachable", error)
+    }
+    if (status !in 200..299) {
+      connection.disconnect()
+      throw AudioEffectsException.DownloadFailed(uri, "HTTP $status")
+    }
+    return connection.inputStream
+  }
+
   private fun copyToCache(uri: String): File {
     val parsed = Uri.parse(uri)
     val name = parsed.lastPathSegment?.substringAfterLast('/') ?: "audio"
     val destination = File(cacheDir(), "${System.nanoTime()}-$name")
 
     val stream = when {
+      // Remote samples. Fetched here rather than in JavaScript because the
+      // importer already owns the cache, and React Native has no file
+      // system to download into without an extra dependency.
+      parsed.scheme == "http" || parsed.scheme == "https" -> openRemote(uri)
       parsed.scheme == "content" -> context.contentResolver.openInputStream(parsed)
       parsed.scheme == "file" -> File(parsed.path ?: uri).inputStream()
       // A bare relative path is a bundled asset. This is the Android
@@ -88,8 +125,14 @@ internal class FileImporter(private val context: Context) {
     }
 
     val extension = cached.extension.lowercase()
-    val playable =
-      if (extension in NATIVE_FORMATS) cached else transcodeToWav(cached, uri)
+    val playable = when {
+      extension in NATIVE_FORMATS -> cached
+      // MediaExtractor has no AIFF support, but AIFF is uncompressed PCM in
+      // a chunked container, so it is cheaper to rewrite the header than to
+      // tell the caller the file is unplayable.
+      extension in AIFF_FORMATS -> convertAiffToWav(cached, uri)
+      else -> transcodeToWav(cached, uri)
+    }
 
     val info = readWavInfo(playable, uri)
     return ImportedFile(
@@ -181,6 +224,108 @@ internal class FileImporter(private val context: Context) {
       runCatching { codec?.release() }
       runCatching { extractor.release() }
     }
+  }
+
+  /**
+   * Rewrite an AIFF as a WAV.
+   *
+   * Both are uncompressed PCM in a chunked container; they differ in chunk
+   * names, in the layout of the format chunk, and in byte order — AIFF is
+   * big-endian. So this reads the COMM chunk for the format, reads SSND for
+   * the samples, swaps each frame, and writes a WAV header in front.
+   *
+   * Only linear PCM is handled. Compressed AIFC variants fall through to the
+   * platform decoder, which will reject them with a clear error.
+   */
+  private fun convertAiffToWav(source: File, originalUri: String): File {
+    try {
+      val bytes = source.readBytes()
+      val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN)
+
+      if (bytes.size < 12 || String(bytes, 0, 4) != "FORM") {
+        throw AudioEffectsException.DecodeFailed(originalUri)
+      }
+
+      var channelCount = 0
+      var sampleRate = 0
+      var bitsPerSample = 0
+      var dataOffset = -1
+      var dataSize = 0
+
+      // Walk the chunk list; COMM and SSND can appear in either order.
+      var offset = 12
+      while (offset + 8 <= bytes.size) {
+        val id = String(bytes, offset, 4)
+        val size = buffer.getInt(offset + 4)
+        val body = offset + 8
+
+        when (id) {
+          "COMM" -> {
+            channelCount = buffer.getShort(body).toInt()
+            bitsPerSample = buffer.getShort(body + 6).toInt()
+            // The rate is an 80-bit IEEE 754 extended float.
+            sampleRate = readExtendedFloat(bytes, body + 8)
+          }
+          "SSND" -> {
+            // Skip the offset and blockSize fields that precede the samples.
+            val ssndOffset = buffer.getInt(body)
+            dataOffset = body + 8 + ssndOffset
+            dataSize = size - 8 - ssndOffset
+          }
+        }
+
+        offset = body + size + (size % 2)
+      }
+
+      if (dataOffset < 0 || channelCount <= 0 || sampleRate <= 0) {
+        throw AudioEffectsException.DecodeFailed(originalUri)
+      }
+      if (bitsPerSample != 16) {
+        // Anything other than 16-bit would need resampling the sample words
+        // too; let the platform decoder try instead of guessing.
+        return transcodeToWav(source, originalUri)
+      }
+
+      dataSize = dataSize.coerceAtMost(bytes.size - dataOffset)
+      val pcm = ByteArray(dataSize)
+      // AIFF samples are big-endian; WAV wants little-endian.
+      var index = 0
+      while (index + 1 < dataSize) {
+        pcm[index] = bytes[dataOffset + index + 1]
+        pcm[index + 1] = bytes[dataOffset + index]
+        index += 2
+      }
+
+      val destination = File(cacheDir(), "${source.nameWithoutExtension}.wav")
+      writeWav(destination, pcm, sampleRate, channelCount)
+      return destination
+    } catch (error: AudioEffectsException) {
+      throw error
+    } catch (error: Exception) {
+      throw AudioEffectsException.DecodeFailed(originalUri, error)
+    }
+  }
+
+  /**
+   * Read an 80-bit IEEE 754 extended float, which is how AIFF stores its
+   * sample rate. Only the integer range matters here, so the mantissa is
+   * shifted by the exponent rather than reconstructed exactly.
+   */
+  private fun readExtendedFloat(bytes: ByteArray, offset: Int): Int {
+    val exponent =
+      (((bytes[offset].toInt() and 0x7F) shl 8) or
+        (bytes[offset + 1].toInt() and 0xFF)) - 16383
+    var mantissa = 0L
+    for (i in 0 until 8) {
+      mantissa = (mantissa shl 8) or (bytes[offset + 2 + i].toLong() and 0xFF)
+    }
+    // The leading bit is explicit in this format, so the mantissa spans 63
+    // bits below it.
+    val shift = 63 - exponent
+    if (shift !in 0..63) {
+      return 0
+    }
+    return (mantissa ushr shift).toInt()
   }
 
   /** Prepend a 44-byte canonical WAV header to raw 16-bit PCM. */

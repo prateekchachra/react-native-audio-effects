@@ -344,6 +344,16 @@ internal class KlarinetBackend(private val context: Context) : AudioBackend {
     }
   }
 
+  override fun setSourcePan(sourceId: Int, pan: Float) {
+    synchronized(lock) {
+      // Klarinet has no per-stream pan either, so the source carries its own
+      // placement and the mixer applies it when it sums the streams.
+      // Generators pan themselves as they render. Klarinet has no
+      // per-stream placement for file sources, so those stay centred.
+      sources[sourceId]?.generator?.pan = pan.coerceIn(-1f, 1f)
+    }
+  }
+
   override fun setOscillatorParameter(sourceId: Int, key: String, value: Float) {
     synchronized(lock) {
       val generator = sources[sourceId]?.generator ?: return
@@ -496,6 +506,26 @@ internal class KlarinetBackend(private val context: Context) : AudioBackend {
   private fun emitMetering() {
     val snapshot = synchronized(lock) { sources.values.toList() }
     snapshot.forEach { entry ->
+      // KNOWN LIMITATION, measured on an API 36 emulator.
+      //
+      // `playback.lastPeak` is computed inside the file callback, which
+      // reads from the decoder *upstream* of the effect chain. So for a
+      // file source this reports the dry signal: gain set to -60 dB
+      // still meters unchanged, and the self-check's "effects are in the
+      // signal path" assertions cannot pass no matter what the DSP does.
+      //
+      // Preferring `stream.peakLevel` looked like the fix — it is read
+      // after the chain — but it made things worse: playback metering
+      // stopped crossing the harness's signal threshold at all and the
+      // check hung rather than failing. Whatever that property reports,
+      // it is not a comparable post-chain amplitude.
+      //
+      // Reverted deliberately. A correct fix needs a tap between the
+      // chain and the output that Klarinet does not currently expose,
+      // so this is a backend gap rather than a line to tweak. The
+      // consequence is scoped: effects on Android file sources cannot be
+      // *verified by measurement* here. Generators are unaffected —
+      // they synthesise into the buffer and own their peak.
       val peak = entry.generator?.lastPeak
         ?: entry.playback?.lastPeak
         ?: entry.stream.peakLevel

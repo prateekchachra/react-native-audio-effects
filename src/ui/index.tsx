@@ -26,11 +26,17 @@ export type { KeyboardProps } from './Keyboard';
 export { Knob } from './Knob';
 export type { KnobProps } from './Knob';
 
+export { LFOPanel } from './LFOPanel';
+export type { LFOPanelProps } from './LFOPanel';
+
 export { LevelMeter } from './LevelMeter';
 export type { LevelMeterProps } from './LevelMeter';
 
 export { PresetBar } from './PresetBar';
 export type { Preset, PresetBarProps, PresetValues } from './PresetBar';
+
+export { PresetPanel } from './PresetPanel';
+export type { PresetPanelProps } from './PresetPanel';
 
 export { WaveformView } from './WaveformView';
 export type { WaveformViewProps } from './WaveformView';

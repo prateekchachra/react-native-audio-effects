@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -13,36 +13,22 @@ import { useAudioEngine } from 'react-native-audio-effects';
 import { ThemeProvider, darkTheme } from 'react-native-audio-effects/ui';
 
 import { GeneratorsScreen } from './screens/GeneratorsScreen';
+import { SampleAgentScreen } from './screens/SampleAgentScreen';
 import { StudioScreen } from './screens/StudioScreen';
-import { runSelfCheck } from './selfCheck';
 
 const TABS = [
   { key: 'studio', label: 'Studio' },
   { key: 'generators', label: 'Generators' },
+  { key: 'agent', label: 'Samples' },
 ] as const;
 
 type TabKey = (typeof TABS)[number]['key'];
-
-/**
- * Flip to run the end-to-end diagnostics on launch and print them to the
- * device log. See src/selfCheck.ts — this is how the iOS implementation is
- * verified, since unit tests cannot tell you whether audio is really flowing.
- */
-const RUN_SELF_CHECK_ON_LAUNCH = false;
 
 export default function App() {
   const [tab, setTab] = useState<TabKey>('studio');
   // Mounted once at the root: the engine owns the audio device, so starting
   // it per screen would fight over the session.
   const { isReady, error } = useAudioEngine();
-
-  useEffect(() => {
-    if (isReady && RUN_SELF_CHECK_ON_LAUNCH) {
-      runSelfCheck().catch((caught) =>
-        console.log('[selfcheck] threw:', caught)
-      );
-    }
-  }, [isReady]);
 
   return (
     <GestureHandlerRootView style={styles.root}>
@@ -62,7 +48,13 @@ export default function App() {
           ) : (
             <>
               <View style={styles.body}>
-                {tab === 'studio' ? <StudioScreen /> : <GeneratorsScreen />}
+                {tab === 'studio' ? (
+                  <StudioScreen />
+                ) : tab === 'generators' ? (
+                  <GeneratorsScreen />
+                ) : (
+                  <SampleAgentScreen />
+                )}
               </View>
               <View style={styles.tabBar}>
                 {TABS.map(({ key, label }) => (

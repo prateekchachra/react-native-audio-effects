@@ -21,7 +21,7 @@ import {
   View,
 } from 'react-native';
 
-import type { Effect } from '../api/Effect';
+import type { EffectLike } from '../api/EffectLike';
 import { isParamAvailable } from '../api/capabilities';
 import type { ParamDescriptor } from '../schema';
 import { EffectSlider } from './EffectSlider';
@@ -34,7 +34,7 @@ import {
 } from './theme';
 
 export interface EffectPanelProps {
-  effect: Effect;
+  effect: EffectLike;
   /** `knobs` suits a dense rack; `sliders` reads better on narrow screens. */
   layout?: 'knobs' | 'sliders';
   /** Hide the bypass switch and header, e.g. when embedding in your own card. */
@@ -174,9 +174,9 @@ export function EffectPanel({
 }
 
 export interface EffectRackProps {
-  effects: readonly Effect[];
+  effects: readonly EffectLike[];
   layout?: 'knobs' | 'sliders';
-  onRemove?: (effect: Effect) => void;
+  onRemove?: (effect: EffectLike) => void;
   /** Lay the panels out horizontally, like a hardware rack. */
   horizontal?: boolean;
   theme?: Partial<AudioTheme>;

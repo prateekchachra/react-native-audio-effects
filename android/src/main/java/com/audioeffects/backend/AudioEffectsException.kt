@@ -50,6 +50,13 @@ internal sealed class AudioEffectsException(
       "Could not open an audio file at $uri.",
     )
 
+  class DownloadFailed(url: String, reason: String, cause: Throwable? = null) :
+    AudioEffectsException(
+      "DOWNLOAD_FAILED",
+      "Could not download $url: $reason.",
+      cause,
+    )
+
   class DecodeFailed(uri: String, cause: Throwable? = null) :
     AudioEffectsException(
       "DECODE_FAILED",

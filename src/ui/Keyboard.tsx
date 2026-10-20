@@ -19,7 +19,7 @@
  */
 
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { isBlackKey, noteName, octaveStart } from '../schema';
 import { useAudioTheme, type AudioTheme } from './theme';
@@ -27,26 +27,24 @@ import { useAudioTheme, type AudioTheme } from './theme';
 /** Black keys are near-black regardless of theme, as on a real instrument. */
 const BLACK_KEY_COLOR = '#101216';
 
-/** Semitone offsets of the white keys within an octave. */
-const WHITE_OFFSETS = [0, 2, 4, 5, 7, 9, 11];
-
-/**
- * Which white key each black key sits after, as an index into
- * {@link WHITE_OFFSETS}. There is no black key between E/F or B/C, which is
- * why this is a lookup rather than an even distribution.
- */
-const BLACK_AFTER_WHITE: Record<number, number> = {
-  1: 0, // C#
-  3: 1, // D#
-  6: 3, // F#
-  8: 4, // G#
-  10: 5, // A#
-};
-
 export interface KeyboardProps {
   /** Lowest octave shown, in scientific pitch notation. C4 is middle C. */
   startOctave?: number;
   octaves?: number;
+  /**
+   * Show a full 88-key piano, A0 to C8, overriding the octave range.
+   *
+   * Scrolls horizontally, since 52 white keys will not fit a phone at a
+   * playable width.
+   */
+  fullRange?: boolean;
+  /**
+   * Width of a white key when scrolling. Ignored when the whole range fits,
+   * in which case keys share the available width evenly.
+   */
+  keyWidth?: number;
+  /** Scroll position on first layout, as a MIDI note. Defaults to C4. */
+  initialScrollToNote?: number;
   /** Fired with a MIDI note number when a key goes down. */
   onNoteOn: (midi: number) => void;
   /**
@@ -65,9 +63,16 @@ export interface KeyboardProps {
   theme?: Partial<AudioTheme>;
 }
 
+/** A0 and C8: the bottom and top of a standard 88-key piano. */
+const PIANO_LOWEST = 21;
+const PIANO_HIGHEST = 108;
+
 export function Keyboard({
   startOctave = 3,
   octaves = 2,
+  fullRange = false,
+  keyWidth = 38,
+  initialScrollToNote = 60,
   onNoteOn,
   onNoteOff,
   activeNotes,
@@ -78,30 +83,49 @@ export function Keyboard({
   const theme = useAudioTheme(themeOverride);
   const [pressed, setPressed] = useState<number | undefined>();
 
+  /** Inclusive MIDI range being drawn. */
+  const [lowest, highest] = useMemo(
+    () =>
+      fullRange
+        ? [PIANO_LOWEST, PIANO_HIGHEST]
+        : [octaveStart(startOctave), octaveStart(startOctave + octaves) - 1],
+    [fullRange, startOctave, octaves]
+  );
+
   const whiteNotes = useMemo(() => {
     const notes: number[] = [];
-    for (let octave = 0; octave < octaves; octave++) {
-      const base = octaveStart(startOctave + octave);
-      for (const offset of WHITE_OFFSETS) {
-        notes.push(base + offset);
+    for (let midi = lowest; midi <= highest; midi++) {
+      if (!isBlackKey(midi)) {
+        notes.push(midi);
       }
     }
     return notes;
-  }, [startOctave, octaves]);
+  }, [lowest, highest]);
 
+  /**
+   * Black keys, each paired with the white key it sits after.
+   *
+   * Indexing against the white keys rather than spacing all twelve
+   * semitones evenly is what makes the layout look like a piano — there is
+   * no black key between E/F or B/C.
+   */
   const blackNotes = useMemo(() => {
+    const whiteIndexOf = new Map(
+      whiteNotes.map((midi, index) => [midi, index])
+    );
     const notes: Array<{ midi: number; whiteIndex: number }> = [];
-    for (let octave = 0; octave < octaves; octave++) {
-      const base = octaveStart(startOctave + octave);
-      for (const [semitone, afterWhite] of Object.entries(BLACK_AFTER_WHITE)) {
-        notes.push({
-          midi: base + Number(semitone),
-          whiteIndex: octave * WHITE_OFFSETS.length + afterWhite,
-        });
+    for (let midi = lowest; midi <= highest; midi++) {
+      if (!isBlackKey(midi)) {
+        continue;
+      }
+      // Sits immediately after the white key a semitone below it.
+      const whiteIndex = whiteIndexOf.get(midi - 1);
+      if (whiteIndex !== undefined) {
+        notes.push({ midi, whiteIndex });
       }
     }
     return notes;
-  }, [startOctave, octaves]);
+  }, [lowest, highest, whiteNotes]);
 
   const isHeld = useCallback(
     (midi: number) => pressed === midi || activeNotes?.includes(midi) === true,
@@ -124,10 +148,21 @@ export function Keyboard({
     [onNoteOff]
   );
 
-  const whiteWidthPercent = 100 / whiteNotes.length;
+  const scrolls = fullRange;
+  const totalWidth = whiteNotes.length * keyWidth;
+  /** Scroll so the requested note starts roughly centred. */
+  const initialOffset = useMemo(() => {
+    if (!scrolls) {
+      return 0;
+    }
+    const index = whiteNotes.findIndex((midi) => midi >= initialScrollToNote);
+    return Math.max(0, (index < 0 ? 0 : index) * keyWidth - keyWidth * 3);
+  }, [scrolls, whiteNotes, initialScrollToNote, keyWidth]);
 
-  return (
-    <View style={[styles.container, { height }]}>
+  const body = (
+    <View
+      style={[styles.container, { height }, scrolls && { width: totalWidth }]}
+    >
       <View style={styles.whiteRow}>
         {whiteNotes.map((midi) => {
           const held = isHeld(midi);
@@ -141,6 +176,7 @@ export function Keyboard({
               accessibilityState={{ selected: held }}
               style={[
                 styles.whiteKey,
+                scrolls ? { width: keyWidth } : styles.whiteKeyFlex,
                 {
                   backgroundColor: held ? theme.accent : theme.pointer,
                   borderColor: theme.surface,
@@ -175,9 +211,16 @@ export function Keyboard({
                   backgroundColor: held ? theme.accent : BLACK_KEY_COLOR,
                   borderColor: BLACK_KEY_COLOR,
                   height: height * 0.62,
-                  width: `${whiteWidthPercent * 0.62}%`,
-                  // Centre it on the boundary between two white keys.
-                  left: `${whiteWidthPercent * (whiteIndex + 1) - whiteWidthPercent * 0.31}%`,
+                  ...(scrolls
+                    ? {
+                        width: keyWidth * 0.62,
+                        // Centred on the boundary between two white keys.
+                        left: keyWidth * (whiteIndex + 1) - keyWidth * 0.31,
+                      }
+                    : {
+                        width: `${(100 / whiteNotes.length) * 0.62}%`,
+                        left: `${(100 / whiteNotes.length) * (whiteIndex + 1) - (100 / whiteNotes.length) * 0.31}%`,
+                      }),
                 },
               ]}
             />
@@ -185,6 +228,24 @@ export function Keyboard({
         })}
       </View>
     </View>
+  );
+
+  if (!scrolls) {
+    return body;
+  }
+
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentOffset={{ x: initialOffset, y: 0 }}
+      // The keys are the gesture targets, so the scroll view must not claim
+      // a touch that starts on one.
+      directionalLockEnabled
+      style={{ height }}
+    >
+      {body}
+    </ScrollView>
   );
 }
 
@@ -201,13 +262,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   whiteKey: {
-    flex: 1,
     borderWidth: 1,
     borderBottomLeftRadius: 4,
     borderBottomRightRadius: 4,
     justifyContent: 'flex-end',
     alignItems: 'center',
     paddingBottom: 4,
+  },
+  whiteKeyFlex: {
+    flex: 1,
   },
   keyLabel: {
     fontSize: 9,

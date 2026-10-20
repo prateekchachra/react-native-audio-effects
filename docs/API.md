@@ -346,22 +346,6 @@ have no idea why.
 
 ---
 
-## Known issue: effects on a PolySynth crash on iOS
-
-Adding an effect to a `PolySynth` (the Generators screen) crashes the app:
-
-```
-required condition is false: [AVAudioEngine.mm:1148:GetOutputConnectionPointsForNode:
-  (node != nil && [_nodes containsObject: node])]
-```
-
-Something in `SourceGraph.rebuild()` asks AVAudioEngine about a node that is
-no longer attached. A voice stack attaches an effect per voice, so the rebuild
-path runs once per voice and revisits the same tails repeatedly.
-
-Single sources are unaffected — the Studio screen works. Only the multi-source
-voice-stack path is broken.
-
 ## Platform differences
 
 iOS runs AudioKit; Android runs Klarinet over Oboe. They are structurally
@@ -372,7 +356,6 @@ integer parameter IDs — so parity is reported, not assumed.
 |---|---|---|
 | `distortion`, `bitcrusher` | ✅ | ❌ |
 | delay `tone` | ✅ | ❌ no damping stage |
-| delay `pingPong` | ✅ | ❌ |
 | per-source pan | ✅ any source | generators only |
 | metering a file source | post-chain | **pre-chain** (see below) |
 

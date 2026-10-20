@@ -6,49 +6,27 @@ import SoundpipeAudioKit
 /// Echo with feedback and a damping filter in the repeat path.
 final class DelayEffect: EffectNode {
   static let type = "delay"
-  static let supportedKeys = ["time", "feedback", "mix", "tone", "pingPong"]
+  static let supportedKeys = ["time", "feedback", "mix", "tone"]
 
-  /**
-   One delay line, panned.
-
-   This was briefly two lines offset in time, which is how you fake a
-   ping-pong without the feedback cycle AVAudioEngine refuses to build.
-   It sounded right and cost six nodes per instance, which is fine for
-   one source and fatal across a voice pool: a synth attaches an effect
-   per voice, and the engine dies somewhere past a hundred nodes.
-
-   So `pingPong` now only places the repeats in the stereo field rather
-   than bouncing them between channels. Honest about what it does, and
-   three nodes instead of six. A real ping-pong belongs in a custom
-   AudioUnit where the feedback path can cross channels internally.
-   */
   private let delay: Delay
-  private let panner: Panner
-  private let mixer: DryWetMixer
-
-  var outputNode: Node { mixer }
+  var outputNode: Node { delay }
 
   init(input: Node) {
     delay = Delay(input)
-    // The outer mixer owns the blend, so the line itself runs fully wet.
-    delay.dryWetMix = 100
-    panner = Panner(delay)
-    mixer = DryWetMixer(input, panner)
   }
 
   func setParameter(_ key: String, _ value: Float) {
     switch key {
     case "time":
+      // Schema carries milliseconds (Klarinet's native unit); AudioKit wants
+      // seconds.
       delay.time = Convert.clamp(Convert.msToSeconds(value), 0, 2)
     case "feedback":
       delay.feedback = Convert.unitToPercent(value)
     case "mix":
-      mixer.balance = Convert.clamp(value, 0, 1)
+      delay.dryWetMix = Convert.unitToPercent(value)
     case "tone":
       delay.lowPassCutoff = Convert.clamp(value, 10, 22050)
-    case "pingPong":
-      // Offsets the repeats to one side; 0 keeps them centred.
-      panner.pan = Convert.clamp(value, 0, 1)
     default:
       break
     }

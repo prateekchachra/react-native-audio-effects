@@ -13,12 +13,14 @@ import { useAudioEngine } from 'react-native-audio-effects';
 import { ThemeProvider, darkTheme } from 'react-native-audio-effects/ui';
 
 import { GeneratorsScreen } from './screens/GeneratorsScreen';
+import { SampleAgentScreen } from './screens/SampleAgentScreen';
 import { StudioScreen } from './screens/StudioScreen';
 import { runSelfCheck } from './selfCheck';
 
 const TABS = [
   { key: 'studio', label: 'Studio' },
   { key: 'generators', label: 'Generators' },
+  { key: 'agent', label: 'Samples' },
 ] as const;
 
 type TabKey = (typeof TABS)[number]['key'];
@@ -62,7 +64,13 @@ export default function App() {
           ) : (
             <>
               <View style={styles.body}>
-                {tab === 'studio' ? <StudioScreen /> : <GeneratorsScreen />}
+                {tab === 'studio' ? (
+                  <StudioScreen />
+                ) : tab === 'generators' ? (
+                  <GeneratorsScreen />
+                ) : (
+                  <SampleAgentScreen />
+                )}
               </View>
               <View style={styles.tabBar}>
                 {TABS.map(({ key, label }) => (

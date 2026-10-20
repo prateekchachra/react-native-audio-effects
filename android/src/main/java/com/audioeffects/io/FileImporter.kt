@@ -39,6 +39,9 @@ internal class FileImporter(private val context: Context) {
 
     /** Buckets in the waveform peak array, matching the iOS importer. */
     const val PEAK_BUCKET_COUNT = 1000
+
+    /** How long to wait on a remote sample before giving up. */
+    private const val DOWNLOAD_TIMEOUT_MS = 60_000
   }
 
   data class ImportedFile(
@@ -58,12 +61,43 @@ internal class FileImporter(private val context: Context) {
     File(context.cacheDir, CACHE_DIR).apply { mkdirs() }
 
   /** Copy whatever the URI points at into our cache, returning the file. */
+  /**
+   * Open a stream to a remote file.
+   *
+   * Blocking, like the rest of the importer: this runs on the module's
+   * worker thread and the caller is already awaiting a promise.
+   */
+  private fun openRemote(uri: String): java.io.InputStream {
+    val connection = (java.net.URL(uri).openConnection() as java.net.HttpURLConnection)
+      .apply {
+        connectTimeout = DOWNLOAD_TIMEOUT_MS
+        readTimeout = DOWNLOAD_TIMEOUT_MS
+        // Redirects are the norm for CDN-hosted audio.
+        instanceFollowRedirects = true
+      }
+    val status = try {
+      connection.responseCode
+    } catch (error: Exception) {
+      connection.disconnect()
+      throw AudioEffectsException.DownloadFailed(uri, "unreachable", error)
+    }
+    if (status !in 200..299) {
+      connection.disconnect()
+      throw AudioEffectsException.DownloadFailed(uri, "HTTP $status")
+    }
+    return connection.inputStream
+  }
+
   private fun copyToCache(uri: String): File {
     val parsed = Uri.parse(uri)
     val name = parsed.lastPathSegment?.substringAfterLast('/') ?: "audio"
     val destination = File(cacheDir(), "${System.nanoTime()}-$name")
 
     val stream = when {
+      // Remote samples. Fetched here rather than in JavaScript because the
+      // importer already owns the cache, and React Native has no file
+      // system to download into without an extra dependency.
+      parsed.scheme == "http" || parsed.scheme == "https" -> openRemote(uri)
       parsed.scheme == "content" -> context.contentResolver.openInputStream(parsed)
       parsed.scheme == "file" -> File(parsed.path ?: uri).inputStream()
       // A bare relative path is a bundled asset. This is the Android

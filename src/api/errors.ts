@@ -15,6 +15,7 @@ export type AudioErrorCode =
   | 'UNKNOWN_EFFECT'
   | 'UNKNOWN_WAVEFORM'
   | 'FILE_NOT_FOUND'
+  | 'DOWNLOAD_FAILED'
   | 'DECODE_FAILED'
   | 'INVALID_CHAIN_ORDER'
   | 'ENGINE_FAILED'
@@ -53,7 +54,7 @@ export class AudioFileError extends AudioEffectsError {
   readonly uri: string;
 
   constructor(
-    code: 'FILE_NOT_FOUND' | 'DECODE_FAILED',
+    code: 'FILE_NOT_FOUND' | 'DECODE_FAILED' | 'DOWNLOAD_FAILED',
     uri: string,
     message: string
   ) {
@@ -86,7 +87,11 @@ export function rethrowNativeError(
   if (code === 'EFFECT_UNAVAILABLE') {
     throw new EffectUnavailableError(context.effectType ?? 'unknown', message);
   }
-  if (code === 'FILE_NOT_FOUND' || code === 'DECODE_FAILED') {
+  if (
+    code === 'FILE_NOT_FOUND' ||
+    code === 'DECODE_FAILED' ||
+    code === 'DOWNLOAD_FAILED'
+  ) {
     throw new AudioFileError(code, context.uri ?? 'unknown', message);
   }
   throw new AudioEffectsError(code, message);

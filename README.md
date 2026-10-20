@@ -470,3 +470,86 @@ Delay time is now **milliseconds** (it was seconds), and mix/feedback are
 ## License
 
 Apache-2.0
+
+## Sample Agent
+
+Ask for a sound in plain English and get one back, loaded into the engine:
+
+```ts
+import { SampleAgent } from 'react-native-audio-effects';
+
+const agent = new SampleAgent();
+const { source, attribution } = await agent.fetch('a gritty 90bpm lofi drum loop');
+await source.play({ loop: true });
+```
+
+It searches [Openverse](https://openverse.org), which **needs no API key** —
+openly licensed audio from Freesound and other providers, working on a fresh
+install with nothing configured. Splice has no public API, and Freesound's own
+API requires a registered token, so Openverse is the only source that lets this
+feature work out of the box.
+
+`find()` returns the results and what the agent understood, if you want to
+present a list rather than take the top hit:
+
+```ts
+const { query, results } = await agent.find('warm analog pad in F#m');
+query.understood; // { key: 'F#m', terms: 'warm analog pad' }
+```
+
+### Licensing
+
+Most results are CC-BY, where crediting the creator is a licence condition
+rather than a courtesy. Every result carries its licence and creator, and
+`attributionFor(result)` formats a usable credit line. Pass
+`publicDomainOnly: true` to restrict to CC0 and public domain works, which
+carry no attribution requirement.
+
+### Using a language model
+
+The built-in request parser is a vocabulary and a handful of regexes — instant,
+free, offline, and right about tempo, key, duration and loop-vs-one-shot. Swap
+in a model if you want better handling of phrasing it has no entry for:
+
+```ts
+new SampleAgent({
+  interpret: async (prompt) => {
+    const reply = await myModel(prompt);
+    return { terms: reply.terms, bpm: reply.bpm, understood: {} };
+  },
+});
+```
+
+It is a hook rather than a dependency because every free model needs an API
+key, and the feature has to work without one.
+
+### Remote files generally
+
+`AudioEngine.loadFile()` accepts `http(s)` URLs directly — the native importer
+downloads into the same cache a picked document uses, so a sample from the
+network behaves exactly like one off disk.
+
+## Presets
+
+`PresetStore` saves a whole chain: which effects are present, in what order,
+their parameter values, and whether each is bypassed.
+
+```ts
+import { PresetStore } from 'react-native-audio-effects';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const presets = new PresetStore({ storage: AsyncStorage });
+await presets.save('Dub Plate', chain);
+const skipped = await presets.apply('Dub Plate', chain);
+```
+
+Storage is injected rather than depended on, so the library does not force
+AsyncStorage on consumers who keep presets on a server or nowhere at all. The
+default is in-memory.
+
+Recall matches by position and type, and returns the indices it could not fill
+rather than writing values into the wrong effect — `mix` on a reverb and `mix`
+on a distortion are not the same control.
+
+The `<PresetPanel>` component wires this to a UI. `<PresetBar>` is the separate,
+session-only A/B comparison workflow.

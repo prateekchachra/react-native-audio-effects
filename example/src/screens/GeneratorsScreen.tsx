@@ -8,17 +8,26 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
+  EFFECTS,
   ENVELOPE_PARAMS,
   GENERATORS,
   LFO,
   PolySynth,
   envelopeDefaults,
   getGenerator,
+  isEffectAvailable,
   noteName,
+  type EffectType,
   type PlayMode,
-  type Waveform,
+  type VoiceStackEffect,
 } from 'react-native-audio-effects';
-import { Keyboard, Knob, darkTheme } from 'react-native-audio-effects/ui';
+import type { Waveform } from 'react-native-audio-effects';
+import {
+  EffectRack,
+  Keyboard,
+  Knob,
+  darkTheme,
+} from 'react-native-audio-effects/ui';
 
 const MODES: Array<{ key: PlayMode; label: string; hint: string }> = [
   {
@@ -46,6 +55,8 @@ export function GeneratorsScreen() {
   const [synth, setSynth] = useState<PolySynth>();
   const [activeNotes, setActiveNotes] = useState<number[]>([]);
   const [lfoOn, setLfoOn] = useState(false);
+  const [effects, setEffects] = useState<VoiceStackEffect[]>([]);
+  const [status, setStatus] = useState<string>();
   const [envelope, setEnvelope] =
     useState<Record<string, number>>(envelopeDefaults);
 
@@ -82,6 +93,8 @@ export function GeneratorsScreen() {
       }
       setSynth(created);
       setActiveNotes([]);
+      // Effects belong to the old pool's sources, which are being released.
+      setEffects([]);
     })();
 
     return () => {
@@ -101,20 +114,36 @@ export function GeneratorsScreen() {
     if (!lfoOn || !synth) {
       return;
     }
-    const lfo = new LFO({ rate: 4, shape: 'sine', depth: 0.8 });
-    lfo.add({
-      min: 0.02,
-      max: 0.24,
-      write: (value) => synth.setAmplitude(value),
-    });
+    const lfo = new LFO({ rate: 1.2, shape: 'sine', depth: 0.9 });
+
+    // Prefer sweeping a filter if the patch has one — that is what an LFO
+    // is usually for. Otherwise fall back to the synth's own level, which
+    // is audible on any patch.
+    const filter = effects.find(
+      (effect) =>
+        effect.type === 'lowPassFilter' || effect.type === 'highPassFilter'
+    );
+    if (filter) {
+      lfo.addParam(filter as never, 'cutoff', { min: 200, max: 8000 });
+    } else {
+      lfo.rate = 4;
+      lfo.add({
+        min: 0.02,
+        max: 0.24,
+        write: (value) => synth.setAmplitude(value),
+      });
+    }
+
     lfo.start();
     lfoRef.current = lfo;
 
     return () => {
       lfo.dispose();
-      synth.setAmplitude(0.22);
+      if (!filter) {
+        synth.setAmplitude(0.22);
+      }
     };
-  }, [lfoOn, synth]);
+  }, [lfoOn, synth, effects]);
 
   const noteOn = useCallback(
     (midi: number) => {
@@ -123,6 +152,34 @@ export function GeneratorsScreen() {
       }
       synth.noteOn(midi);
       setActiveNotes(synth.activeNotes);
+    },
+    [synth]
+  );
+
+  const addEffect = useCallback(
+    async (type: EffectType) => {
+      if (!synth) {
+        return;
+      }
+      try {
+        const stack = await synth.addEffect(type);
+        setEffects((previous) => [...previous, stack]);
+        setStatus(undefined);
+      } catch (error) {
+        setStatus((error as Error).message);
+      }
+    },
+    [synth]
+  );
+
+  const removeEffect = useCallback(
+    (stack: VoiceStackEffect) => {
+      if (!synth) {
+        return;
+      }
+      synth.removeEffect(stack).then(() => {
+        setEffects((previous) => previous.filter((e) => e.id !== stack.id));
+      });
     },
     [synth]
   );
@@ -209,15 +266,23 @@ export function GeneratorsScreen() {
             </Text>
           </Pressable>
         ))}
+      </View>
+
+      <Text style={styles.subheading}>Modulation</Text>
+      <View style={styles.chips}>
         <Pressable
           onPress={() => setLfoOn((on) => !on)}
           style={[styles.chip, lfoOn && styles.chipActive]}
         >
           <Text style={[styles.chipText, lfoOn && styles.chipTextActive]}>
-            LFO
+            {lfoOn ? 'LFO on' : 'LFO off'}
           </Text>
         </Pressable>
       </View>
+      <Text style={styles.hintLine}>
+        Sweeps a filter's cutoff if the chain has one, otherwise the synth
+        level.
+      </Text>
 
       <Text style={styles.subheading}>Envelope</Text>
       <View style={styles.adsrRow}>
@@ -250,6 +315,33 @@ export function GeneratorsScreen() {
           to play notes.
         </Text>
       )}
+
+      <Text style={styles.subheading}>Add an effect</Text>
+      {status ? <Text style={styles.hintLine}>{status}</Text> : null}
+      <View style={styles.chips}>
+        {EFFECTS.map((descriptor) => {
+          const available = isEffectAvailable(descriptor.type);
+          return (
+            <Pressable
+              key={descriptor.type}
+              disabled={!available || !synth}
+              onPress={() => addEffect(descriptor.type)}
+              style={[styles.chip, !available && styles.chipDisabled]}
+            >
+              <Text
+                style={[styles.chipText, !available && styles.chipTextDisabled]}
+              >
+                {descriptor.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      <Text style={styles.subheading}>
+        Chain {effects.length > 0 ? `(${effects.length})` : ''}
+      </Text>
+      <EffectRack effects={effects} onRemove={removeEffect as never} />
     </ScrollView>
   );
 }
@@ -339,6 +431,12 @@ const styles = StyleSheet.create({
   chipActive: {
     backgroundColor: darkTheme.accent,
     borderColor: darkTheme.accent,
+  },
+  chipDisabled: {
+    opacity: 0.4,
+  },
+  chipTextDisabled: {
+    color: darkTheme.disabled,
   },
   chipText: {
     color: darkTheme.text,

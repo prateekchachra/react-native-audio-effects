@@ -22,8 +22,92 @@ import {
   unisonOffsets,
   type Waveform,
 } from '../schema';
+import {
+  getEffect,
+  getParam,
+  quantize,
+  type EffectDescriptor,
+  type EffectType,
+  type ParamDescriptor,
+} from '../schema';
 import { AudioEngine } from './AudioEngine';
+import type { Effect } from './Effect';
+import type { EffectLike } from './EffectLike';
 import type { Source } from './Source';
+
+/**
+ * One effect across a whole voice pool.
+ *
+ * A synth patch has one delay, not one delay per voice — but every voice is
+ * a separate source with its own chain, so the effect exists once per voice
+ * and the copies have to move together. This fans every write out to all of
+ * them and reads back from the first, so a control can drive it exactly as
+ * it would drive a single effect.
+ */
+export class VoiceStackEffect implements EffectLike {
+  readonly id: number;
+  readonly type: EffectType;
+  readonly descriptor: EffectDescriptor;
+
+  /** @internal — one per voice source. */
+  readonly instances: Effect[];
+  private bypassed = false;
+
+  constructor(type: EffectType, instances: Effect[]) {
+    const descriptor = getEffect(type);
+    if (!descriptor || instances.length === 0) {
+      throw new Error(`Cannot build a voice stack for "${type}"`);
+    }
+    this.type = type;
+    this.descriptor = descriptor;
+    this.instances = instances;
+    // Borrow the first voice's handle so React keys stay stable.
+    this.id = instances[0]!.id;
+  }
+
+  get params(): readonly ParamDescriptor[] {
+    return this.descriptor.params;
+  }
+
+  set(key: string, value: number): void {
+    const param = getParam(this.type, key);
+    const next = param ? quantize(param, value) : value;
+    for (const instance of this.instances) {
+      instance.set(key, next);
+    }
+  }
+
+  get(key: string): number {
+    return this.instances[0]!.get(key);
+  }
+
+  setMany(values: Record<string, number>): void {
+    for (const instance of this.instances) {
+      instance.setMany(values);
+    }
+  }
+
+  getValues(): Record<string, number> {
+    return this.instances[0]!.getValues();
+  }
+
+  reset(): void {
+    for (const instance of this.instances) {
+      instance.reset();
+    }
+  }
+
+  get enabled(): boolean {
+    return !this.bypassed;
+  }
+
+  set enabled(value: boolean) {
+    this.bypassed = !value;
+    for (const instance of this.instances) {
+      instance.enabled = value;
+    }
+  }
+}
 
 /**
  * How new notes relate to notes already sounding.
@@ -69,6 +153,7 @@ export class PolySynth {
   private glideTimer: ReturnType<typeof setInterval> | undefined;
   private currentHz = 0;
   private envelope = envelopeDefaults();
+  private stacks: VoiceStackEffect[] = [];
   private disposed = false;
 
   readonly options: Required<PolySynthOptions>;
@@ -301,11 +386,54 @@ export class PolySynth {
     return [...this.pool, ...this.voices.flatMap((voice) => voice.sources)];
   }
 
+  // ---------------------------------------------------------------- effects
+
+  /**
+   * Add an effect to every voice.
+   *
+   * Returns a single handle that writes to all of them, so the caller sees
+   * one delay rather than one per voice.
+   *
+   * @throws {EffectUnavailableError} when the platform lacks the effect.
+   */
+  async addEffect(type: EffectType): Promise<VoiceStackEffect> {
+    const instances: Effect[] = [];
+    for (const source of this.allSources()) {
+      instances.push(await source.addEffect(type));
+    }
+    const stack = new VoiceStackEffect(type, instances);
+    this.stacks.push(stack);
+    return stack;
+  }
+
+  async removeEffect(stack: VoiceStackEffect): Promise<void> {
+    const index = this.stacks.indexOf(stack);
+    if (index === -1) {
+      return;
+    }
+    this.stacks.splice(index, 1);
+    const sources = this.allSources();
+    await Promise.all(
+      stack.instances.map(async (instance) => {
+        const owner = sources.find((source) =>
+          source.effects.some((candidate) => candidate.id === instance.id)
+        );
+        await owner?.removeEffect(instance);
+      })
+    );
+  }
+
+  /** The patch's effects, in signal order. */
+  get effects(): readonly VoiceStackEffect[] {
+    return this.stacks;
+  }
+
   // --------------------------------------------------------------- cleanup
 
   async dispose(): Promise<void> {
     this.disposed = true;
     this.stopGlide();
+    this.stacks = [];
     const sources = this.allSources();
     this.voices = [];
     this.pool = [];

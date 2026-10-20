@@ -17,6 +17,7 @@ import {
   EFFECTS,
   isEffectAvailable,
   type Effect,
+  type EffectLike,
   type EffectType,
   type Source,
 } from 'react-native-audio-effects';
@@ -103,12 +104,21 @@ export function StudioScreen() {
   );
 
   const removeEffect = useCallback(
-    async (effect: Effect) => {
+    (effect: EffectLike) => {
       if (!source) {
         return;
       }
-      await source.removeEffect(effect);
-      setEffects((previous) => previous.filter((e) => e !== effect));
+      // The rack hands back the interface, not the concrete effect; the
+      // chain is the authority on which instance that is.
+      const target = source.effects.find(
+        (candidate) => candidate.id === effect.id
+      );
+      if (!target) {
+        return;
+      }
+      source.removeEffect(target).then(() => {
+        setEffects((previous) => previous.filter((e) => e.id !== effect.id));
+      });
     },
     [source]
   );

@@ -5,7 +5,7 @@
  * engine, the effect chain and metering are all working.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   EFFECTS,
@@ -13,11 +13,13 @@ import {
   GENERATORS,
   LFO,
   PolySynth,
+  PresetStore,
   envelopeDefaults,
   getGenerator,
   isEffectAvailable,
   noteName,
   type EffectType,
+  type ParamDescriptor,
   type PlayMode,
   type VoiceStackEffect,
 } from 'react-native-audio-effects';
@@ -26,8 +28,42 @@ import {
   EffectRack,
   Keyboard,
   Knob,
+  LFOPanel,
+  PresetPanel,
   darkTheme,
 } from 'react-native-audio-effects/ui';
+
+/**
+ * Unison controls are synth settings, not effect parameters, so they have
+ * no schema entry. These stand in so `Knob` keeps taking one kind of thing.
+ */
+const DETUNE_PARAM: ParamDescriptor = {
+  key: 'unisonSpread',
+  label: 'Detune',
+  min: 0,
+  max: 60,
+  default: 14,
+  unit: 'cents',
+  taper: 'linear',
+};
+
+const WIDTH_PARAM: ParamDescriptor = {
+  key: 'unisonPan',
+  label: 'Width',
+  min: 0,
+  max: 1,
+  default: 0.6,
+  unit: '%',
+  taper: 'linear',
+};
+
+/**
+ * One store for the screen.
+ *
+ * No storage is passed, so presets live for the session. Wiring
+ * AsyncStorage here is a one-liner and is what a real app would do.
+ */
+const presetStore = new PresetStore({ namespace: 'generators' });
 
 const MODES: Array<{ key: PlayMode; label: string; hint: string }> = [
   {
@@ -52,9 +88,10 @@ export function GeneratorsScreen() {
   const [waveform, setWaveform] = useState<Waveform>('sawtooth');
   const [mode, setMode] = useState<PlayMode>('poly');
   const [unison, setUnison] = useState(1);
+  const [detuneCents, setDetuneCents] = useState<number>(DETUNE_PARAM.default);
+  const [width, setWidth] = useState<number>(WIDTH_PARAM.default);
   const [synth, setSynth] = useState<PolySynth>();
   const [activeNotes, setActiveNotes] = useState<number[]>([]);
-  const [lfoOn, setLfoOn] = useState(false);
   const [effects, setEffects] = useState<VoiceStackEffect[]>([]);
   const [status, setStatus] = useState<string>();
   const [envelope, setEnvelope] =
@@ -62,7 +99,11 @@ export function GeneratorsScreen() {
 
   const envelopeRef = useRef(envelope);
   envelopeRef.current = envelope;
-  const lfoRef = useRef<LFO | undefined>(undefined);
+
+  // Read when a synth is built, so turning either knob does not land in the
+  // rebuild effect's dependencies and tear the voice pool down mid-note.
+  const unisonRef = useRef({ spread: detuneCents, pan: width });
+  unisonRef.current = { spread: detuneCents, pan: width };
 
   const descriptor = getGenerator(waveform);
   const isPitched = descriptor?.pitched ?? false;
@@ -78,6 +119,8 @@ export function GeneratorsScreen() {
         waveform,
         mode,
         unison,
+        unisonSpread: unisonRef.current.spread,
+        unisonPan: unisonRef.current.pan,
         maxVoices: 6,
         amplitude: 0.22,
       });
@@ -104,46 +147,17 @@ export function GeneratorsScreen() {
     };
   }, [waveform, mode, unison]);
 
-  // Modulated onto the synth's own level rather than an effect, because
-  // effects currently attach to a single source and this patch spans a
-  // whole voice pool. A per-synth effects bus is tracked as follow-up.
-  useEffect(() => {
-    lfoRef.current?.dispose();
-    lfoRef.current = undefined;
-
-    if (!lfoOn || !synth) {
-      return;
-    }
-    const lfo = new LFO({ rate: 1.2, shape: 'sine', depth: 0.9 });
-
-    // Prefer sweeping a filter if the patch has one — that is what an LFO
-    // is usually for. Otherwise fall back to the synth's own level, which
-    // is audible on any patch.
-    const filter = effects.find(
-      (effect) =>
-        effect.type === 'lowPassFilter' || effect.type === 'highPassFilter'
-    );
-    if (filter) {
-      lfo.addParam(filter as never, 'cutoff', { min: 200, max: 8000 });
-    } else {
-      lfo.rate = 4;
-      lfo.add({
-        min: 0.02,
-        max: 0.24,
-        write: (value) => synth.setAmplitude(value),
-      });
-    }
-
-    lfo.start();
-    lfoRef.current = lfo;
-
-    return () => {
-      lfo.dispose();
-      if (!filter) {
-        synth.setAmplitude(0.22);
-      }
-    };
-  }, [lfoOn, synth, effects]);
+  /**
+   * One LFO for the screen, driven by its own panel.
+   *
+   * Built once and kept, rather than recreated whenever the patch changes:
+   * the panel holds the assignment, and rebuilding the LFO underneath it
+   * would silently drop whatever the user had pointed it at.
+   */
+  const lfo = useMemo(
+    () => new LFO({ rate: 1.2, shape: 'sine', depth: 0.9 }),
+    []
+  );
 
   const noteOn = useCallback(
     (midi: number) => {
@@ -268,21 +282,47 @@ export function GeneratorsScreen() {
         ))}
       </View>
 
-      <Text style={styles.subheading}>Modulation</Text>
-      <View style={styles.chips}>
-        <Pressable
-          onPress={() => setLfoOn((on) => !on)}
-          style={[styles.chip, lfoOn && styles.chipActive]}
-        >
-          <Text style={[styles.chipText, lfoOn && styles.chipTextActive]}>
-            {lfoOn ? 'LFO on' : 'LFO off'}
+      {unison > 1 ? (
+        <>
+          <Text style={styles.hintLine}>
+            Detune spreads the stack in pitch; width spreads it across the
+            stereo field. Detune alone just beats in the middle — the two
+            together are what make a stack sound large.
           </Text>
-        </Pressable>
+          <View style={styles.adsrRow}>
+            <Knob
+              param={DETUNE_PARAM}
+              value={detuneCents}
+              onChange={(value) => {
+                setDetuneCents(value);
+                synth?.setUnisonSpread(value);
+              }}
+              size={60}
+            />
+            <Knob
+              param={WIDTH_PARAM}
+              value={width}
+              onChange={(value) => {
+                setWidth(value);
+                synth?.setUnisonPan(value);
+              }}
+              size={60}
+            />
+          </View>
+        </>
+      ) : null}
+
+      <Text style={styles.subheading}>Modulation</Text>
+      <View style={styles.panel}>
+        <LFOPanel
+          // Remounting on a rebuild drops an assignment that now points at
+          // effects which no longer exist.
+          key={`${waveform}:${mode}:${unison}`}
+          lfo={lfo}
+          targets={effects}
+          theme={darkTheme}
+        />
       </View>
-      <Text style={styles.hintLine}>
-        Sweeps a filter's cutoff if the chain has one, otherwise the synth
-        level.
-      </Text>
 
       <Text style={styles.subheading}>Envelope</Text>
       <View style={styles.adsrRow}>
@@ -342,6 +382,11 @@ export function GeneratorsScreen() {
         Chain {effects.length > 0 ? `(${effects.length})` : ''}
       </Text>
       <EffectRack effects={effects} onRemove={removeEffect as never} />
+
+      <Text style={styles.subheading}>Presets</Text>
+      <View style={styles.panel}>
+        <PresetPanel store={presetStore} chain={effects} theme={darkTheme} />
+      </View>
     </ScrollView>
   );
 }
@@ -377,6 +422,10 @@ const styles = StyleSheet.create({
     fontFamily: darkTheme.fontFamily,
     lineHeight: 18,
     marginBottom: 10,
+  },
+  /** Wrapper for the kit's own panels, which bring their own padding. */
+  panel: {
+    marginTop: 2,
   },
   adsrRow: {
     flexDirection: 'row',

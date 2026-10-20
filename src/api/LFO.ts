@@ -18,8 +18,8 @@
  * their internal LFOs rather than being driven from here.
  */
 
-import { getParam, quantize, type EffectType } from '../schema';
-import type { Effect } from './Effect';
+import { getParam, quantize } from '../schema';
+import type { EffectLike } from './EffectLike';
 
 export type LFOShape = 'sine' | 'triangle' | 'square' | 'sawtooth' | 'random';
 
@@ -77,11 +77,11 @@ export class LFO {
    * caller restating what that means.
    */
   addParam(
-    effect: Effect,
+    effect: EffectLike,
     key: string,
     bounds?: { min?: number; max?: number }
   ): this {
-    const param = getParam(effect.type as EffectType, key);
+    const param = getParam(effect.type, key);
     if (!param) {
       return this;
     }
@@ -111,6 +111,17 @@ export class LFO {
 
   get isRunning(): boolean {
     return this.timer !== undefined;
+  }
+
+  /**
+   * Drop every target but keep running.
+   *
+   * Re-pointing an LFO needs this: `dispose` would also stop the timer, and
+   * a UI that reassigns the destination should not have to restart it.
+   */
+  clear(): this {
+    this.targets = [];
+    return this;
   }
 
   /** Release the targets so an effect can be garbage collected. */

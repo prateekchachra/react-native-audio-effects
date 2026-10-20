@@ -76,6 +76,7 @@ export {
   noteName,
   octaveStart,
   unisonOffsets,
+  unisonPans,
 } from './music';
 
 import { EFFECTS } from './effects';

@@ -20,6 +20,7 @@ import {
   envelopeDefaults,
   midiToFrequency,
   unisonOffsets,
+  unisonPans,
   type Waveform,
 } from '../schema';
 import {
@@ -130,6 +131,14 @@ export interface PolySynthOptions {
   unison?: number;
   /** Total detune spread across the unison stack, in cents. */
   unisonSpread?: number;
+  /**
+   * How wide the unison stack sits in the stereo field, 0 to 1.
+   *
+   * 0 stacks every voice in the centre. 1 pushes the outermost pair hard
+   * left and right. Width is what makes a detuned stack sound large rather
+   * than merely out of tune — the detuning alone just beats in mono.
+   */
+  unisonPan?: number;
   /** Glide time for `portamento`, in milliseconds. */
   glideMs?: number;
   amplitude?: number;
@@ -175,6 +184,7 @@ export class PolySynth {
       maxVoices: Math.max(1, options.maxVoices ?? 8),
       unison: Math.max(1, options.unison ?? 1),
       unisonSpread: options.unisonSpread ?? 14,
+      unisonPan: options.unisonPan ?? 0,
       glideMs: options.glideMs ?? 120,
       amplitude: options.amplitude ?? 0.25,
     };
@@ -307,12 +317,48 @@ export class PolySynth {
 
   // ----------------------------------------------------------------- tuning
 
-  /** Spread a unison stack around a centre frequency. */
+  /** Spread a unison stack around a centre frequency, in pitch and in space. */
   private tuneStack(sources: Source[], hz: number): void {
     const offsets = unisonOffsets(sources.length, this.options.unisonSpread);
+    const pans = unisonPans(sources.length, this.options.unisonPan);
     sources.forEach((source, index) => {
       source.setOscillatorParam('frequency', detune(hz, offsets[index] ?? 0));
+      source.setPan(pans[index] ?? 0);
     });
+  }
+
+  // -------------------------------------------------------------- unison
+
+  /**
+   * Change the detune spread, in cents.
+   *
+   * Takes effect on sounding voices too, so turning the knob while a chord
+   * is held does what the ear expects.
+   */
+  setUnisonSpread(cents: number): void {
+    this.options.unisonSpread = Math.max(0, cents);
+    this.retuneHeldVoices();
+  }
+
+  /** Change the stereo width of the stack, 0 to 1. */
+  setUnisonPan(width: number): void {
+    this.options.unisonPan = Math.min(1, Math.max(0, width));
+    this.retuneHeldVoices();
+  }
+
+  get unisonSpread(): number {
+    return this.options.unisonSpread;
+  }
+
+  get unisonPan(): number {
+    return this.options.unisonPan;
+  }
+
+  /** Re-apply tuning and placement to everything currently sounding. */
+  private retuneHeldVoices(): void {
+    for (const voice of this.voices) {
+      this.tuneStack(voice.sources, midiToFrequency(voice.midi));
+    }
   }
 
   /**

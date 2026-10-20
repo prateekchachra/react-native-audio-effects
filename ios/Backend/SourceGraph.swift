@@ -92,6 +92,15 @@ final class SourceGraph {
 
    It is also what the root mixer listens to, not `output`.
    */
+  /**
+   Stereo placement for the whole source.
+
+   Sits after the effect chain and before the meter, so it is never touched
+   by a structural edit and a unison stack can spread itself across the
+   field without each voice needing its own pan effect.
+   */
+  private(set) var panner: Panner!
+
   private(set) var meter: Fader!
 
   /**
@@ -131,6 +140,11 @@ final class SourceGraph {
   /// Whether the gate is currently open, so a second note-on can be told
   /// apart from the first and retriggered.
   private(set) var isGateOpen = false
+
+  /// Place the source in the stereo field. -1 hard left, 1 hard right.
+  func setPan(_ value: Float) {
+    panner.pan = max(-1, min(1, value))
+  }
 
   private(set) var slots: [EffectSlot] = []
   private var amplitudeTap: AmplitudeTap?
@@ -177,7 +191,8 @@ final class SourceGraph {
     self.engine = engine
     self.file = player.file
     self.head = Fader(player, gain: 1)
-    self.meter = Fader(output, gain: 1)
+    self.panner = Panner(output)
+    self.meter = Fader(self.panner, gain: 1)
     rebuild()
   }
 
@@ -191,7 +206,8 @@ final class SourceGraph {
     self.file = nil
     self.envelope = AmplitudeEnvelope(generator.node)
     self.head = Fader(self.envelope!, gain: 1)
-    self.meter = Fader(output, gain: 1)
+    self.panner = Panner(output)
+    self.meter = Fader(self.panner, gain: 1)
     rebuild()
   }
 

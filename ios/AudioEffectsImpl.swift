@@ -146,6 +146,10 @@ public final class AudioEffectsImpl: NSObject {
     backend.setSourceVolume(Int(sourceId), volume: Float(volume))
   }
 
+  @objc public func setSourcePan(_ sourceId: Double, pan: Double) {
+    backend.setSourcePan(Int(sourceId), pan: Float(pan))
+  }
+
   @objc public func setOscillatorParameter(
     _ sourceId: Double,
     key: String,

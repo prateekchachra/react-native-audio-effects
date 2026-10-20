@@ -134,6 +134,21 @@ export const DELAY: EffectDescriptor = {
         'Low-pass filter in the feedback path, for darkening repeats. ' +
         'AudioKit only — Klarinet’s delay has no damping stage.',
     },
+    {
+      key: 'pingPong',
+      label: 'Ping Pong',
+      min: 0,
+      max: 1,
+      default: 0,
+      unit: '%',
+      taper: 'linear',
+      platforms: IOS_ONLY,
+      description:
+        'Bounces the repeats between left and right. At 0 the delay is ' +
+        'centred and mono. Turning it up pans the two delay lines apart ' +
+        'and offsets one of them in time, so the echoes alternate across ' +
+        'the stereo field.',
+    },
   ],
 };
 

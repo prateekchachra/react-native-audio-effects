@@ -4,6 +4,7 @@ import com.vectencia.klarinet.AudioStreamCallback
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -131,6 +132,16 @@ internal abstract class Generator(
   @Volatile var isRunning: Boolean = false
 
   /**
+   * Stereo placement, -1 hard left to 1 hard right.
+   *
+   * Applied here rather than as a chain effect because the generator is
+   * where the mono signal becomes channels in the first place, and because
+   * a unison stack needs each voice panned independently without paying for
+   * an effect node per voice.
+   */
+  @Volatile var pan: Float = 0f
+
+  /**
    * Amplitude envelope.
    *
    * Bypassed until the first gate: a generator played with the transport
@@ -165,14 +176,27 @@ internal abstract class Generator(
     var index = 0
     val gain = amplitude
     val gated = envelopeEngaged
+    // Constant power, so sweeping the pan does not dip in level at the
+    // centre the way a linear law does. Read once: `pan` is volatile and
+    // the trig is not worth doing per sample.
+    val angle = (pan.coerceIn(-1f, 1f) + 1f) * 0.25f * PI.toFloat()
+    val leftGain = cos(angle)
+    val rightGain = sin(angle)
+    val stereo = channelCount == 2
     for (frame in 0 until numFrames) {
       val shaped = if (gated) envelope.next() else 1f
       val sample = nextSample() * gain * shaped
       val magnitude = abs(sample)
       if (magnitude > peak) peak = magnitude
-      // Same sample to every channel: these sources are mono by nature.
-      for (channel in 0 until channelCount) {
-        buffer[index++] = sample
+      if (stereo) {
+        buffer[index++] = sample * leftGain
+        buffer[index++] = sample * rightGain
+      } else {
+        // Mono or surround: these sources have nothing to spread, so every
+        // channel gets the same sample.
+        for (channel in 0 until channelCount) {
+          buffer[index++] = sample
+        }
       }
     }
     lastPeak = peak

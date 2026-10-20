@@ -75,6 +75,17 @@ export class Source {
   }
 
   /** Output level as linear amplitude, 0..1. Synchronous. */
+  /**
+   * Place the source in the stereo field.
+   *
+   * -1 is hard left, 0 centre, 1 hard right. Applied after the effect chain,
+   * so it survives adding and removing effects.
+   */
+  setPan(pan: number): void {
+    this.assertLive();
+    NativeAudioEffects.setSourcePan(this.id, Math.min(1, Math.max(-1, pan)));
+  }
+
   setVolume(volume: number): void {
     this.assertLive();
     NativeAudioEffects.setSourceVolume(

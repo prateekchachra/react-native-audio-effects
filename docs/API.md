@@ -313,6 +313,24 @@ stays smooth while JS is busy, and writes coalesce to one call per frame.
 
 ---
 
+## Adding a method to the native module
+
+Five layers, and the fifth is the one that bites:
+
+1. `src/NativeAudioEffects.ts` — the spec
+2. `ios/AudioEffects.mm` — the Objective-C++ bridge
+3. `ios/AudioEffectsImpl.swift` — the Swift implementation
+4. `android/.../AudioEffectsModule.kt` — the Kotlin module
+5. **`pod install`** — regenerates the protocol codegen emits from the spec
+
+Step 5 runs at `pod install` time, *not* during `xcodebuild`. Add a method,
+rebuild, and the generated protocol is still stale — the method is invisible
+to JS even though all four hand-written layers are correct. It fails as
+`undefined is not a function`, exactly like a missing bridge method.
+
+`src/__tests__/bridge-parity.test.ts` covers layers 1–4. If it passes and the
+call still fails at runtime, you are looking at step 5.
+
 ## Errors
 
 `AudioEffectsError` with a typed `code`, plus `AudioFileError` and

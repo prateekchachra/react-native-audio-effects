@@ -53,10 +53,7 @@ export function StudioScreen() {
         const loaded = await AudioEngine.loadFile(uri);
         setSource(loaded);
         setEffects([]);
-        // Play straight away. Loading a sound in order to then go and press
-        // play is a step with no decision in it.
-        await loaded.play({ loop: true });
-        setIsPlaying(true);
+        setIsPlaying(false);
         setStatus(
           `${loaded.info.channelCount}ch · ` +
             `${(loaded.info.sampleRate / 1000).toFixed(1)} kHz · ` +

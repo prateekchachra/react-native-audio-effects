@@ -183,6 +183,11 @@ static void (^RNAEValueCompletion(RCTPromiseResolveBlock resolve,
   [_impl setSourceVolume:sourceId volume:volume];
 }
 
+- (void)setSourcePan:(double)sourceId pan:(double)pan
+{
+  [_impl setSourcePan:sourceId pan:pan];
+}
+
 - (void)setOscillatorParameter:(double)sourceId
                            key:(NSString *)key
                          value:(double)value

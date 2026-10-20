@@ -5,7 +5,7 @@
  * fresh install with nothing configured.
  */
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -20,9 +20,10 @@ import {
   attributionFor,
   type SampleQuery,
   type SampleResult,
-  type Source,
 } from 'react-native-audio-effects';
 import { darkTheme } from 'react-native-audio-effects/ui';
+
+import { SamplePlayerModal } from './SamplePlayerModal';
 
 const EXAMPLES = [
   'a gritty 90bpm lofi drum loop',
@@ -38,20 +39,8 @@ export function SampleAgentScreen() {
   const [results, setResults] = useState<SampleResult[]>([]);
   const [status, setStatus] = useState<string>();
   const [busy, setBusy] = useState(false);
-  const [playingId, setPlayingId] = useState<string>();
 
-  // One source at a time: auditioning a second sample should replace the
-  // first, not layer on top of it.
-  const auditionRef = useRef<Source | undefined>(undefined);
-
-  const stopAudition = useCallback(async () => {
-    const current = auditionRef.current;
-    auditionRef.current = undefined;
-    setPlayingId(undefined);
-    if (current) {
-      await current.release().catch(() => undefined);
-    }
-  }, []);
+  const [auditioning, setAuditioning] = useState<SampleResult>();
 
   const runSearch = useCallback(
     async (text: string) => {
@@ -78,29 +67,6 @@ export function SampleAgentScreen() {
       }
     },
     [agent, busy]
-  );
-
-  const audition = useCallback(
-    async (result: SampleResult) => {
-      if (playingId === result.id) {
-        await stopAudition();
-        return;
-      }
-      await stopAudition();
-      setStatus(`Loading "${result.title}"…`);
-      try {
-        // The remote URL goes straight to the engine; the native importer
-        // downloads and decodes it into its own cache.
-        const loaded = await agent.load(result);
-        auditionRef.current = loaded.source;
-        await loaded.source.play({ loop: false });
-        setPlayingId(result.id);
-        setStatus(loaded.attribution);
-      } catch (error) {
-        setStatus(error instanceof Error ? error.message : String(error));
-      }
-    },
-    [agent, playingId, stopAudition]
   );
 
   return (
@@ -175,20 +141,17 @@ export function SampleAgentScreen() {
       {status ? <Text style={styles.status}>{status}</Text> : null}
 
       {results.map((result) => {
-        const active = result.id === playingId;
+        const active = result.id === auditioning?.id;
         return (
           <Pressable
             key={result.id}
-            onPress={() => {
-              audition(result).catch(() => undefined);
-            }}
+            onPress={() => setAuditioning(result)}
             style={[styles.result, active && styles.resultActive]}
             accessibilityRole="button"
             accessibilityLabel={`Play ${result.title}`}
           >
             <Text style={styles.resultTitle} numberOfLines={1}>
-              {active ? '◼ ' : '▶ '}
-              {result.title}
+              ▶ {result.title}
             </Text>
             <Text style={styles.resultMeta}>{attributionFor(result)}</Text>
             {result.durationSec !== undefined ? (
@@ -206,6 +169,11 @@ export function SampleAgentScreen() {
           not a courtesy. The credit line above each result is the one to use.
         </Text>
       ) : null}
+      <SamplePlayerModal
+        agent={agent}
+        result={auditioning}
+        onClose={() => setAuditioning(undefined)}
+      />
     </ScrollView>
   );
 }

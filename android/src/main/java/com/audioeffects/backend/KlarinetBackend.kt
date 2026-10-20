@@ -506,9 +506,18 @@ internal class KlarinetBackend(private val context: Context) : AudioBackend {
   private fun emitMetering() {
     val snapshot = synchronized(lock) { sources.values.toList() }
     snapshot.forEach { entry ->
+      // Order matters. `playback.lastPeak` is computed in the file
+      // callback, which reads from the decoder *upstream* of the effect
+      // chain — metering off it reports the dry signal and no effect can
+      // ever move the needle. The stream's own level is measured after
+      // the chain, so it is the only honest reading for a file source.
+      //
+      // Generators keep their own peak because they synthesise into the
+      // buffer themselves and there is no earlier point to read.
       val peak = entry.generator?.lastPeak
+        ?: entry.stream.peakLevel.takeIf { it > 0f }
         ?: entry.playback?.lastPeak
-        ?: entry.stream.peakLevel
+        ?: 0f
       // Klarinet reports a single peak rather than per-channel levels, and
       // RMS is approximated from it; a true stereo RMS would need a tap that
       // the SDK does not expose.

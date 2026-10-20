@@ -74,7 +74,6 @@ export class Source {
     await NativeAudioEffects.seekSource(this.id, positionSec);
   }
 
-  /** Output level as linear amplitude, 0..1. Synchronous. */
   /**
    * Place the source in the stereo field.
    *

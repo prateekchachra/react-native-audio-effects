@@ -18,6 +18,8 @@ so a knob can never disagree with the effect behind it.
 - **TurboModule** on RN 0.88, Swift + AudioKit on iOS, Kotlin + Klarinet
   (Oboe) on Android.
 
+**[Full API reference →](docs/API.md)**
+
 ## Install
 
 ```sh

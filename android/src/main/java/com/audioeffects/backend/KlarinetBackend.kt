@@ -506,18 +506,29 @@ internal class KlarinetBackend(private val context: Context) : AudioBackend {
   private fun emitMetering() {
     val snapshot = synchronized(lock) { sources.values.toList() }
     snapshot.forEach { entry ->
-      // Order matters. `playback.lastPeak` is computed in the file
-      // callback, which reads from the decoder *upstream* of the effect
-      // chain — metering off it reports the dry signal and no effect can
-      // ever move the needle. The stream's own level is measured after
-      // the chain, so it is the only honest reading for a file source.
+      // KNOWN LIMITATION, measured on an API 36 emulator.
       //
-      // Generators keep their own peak because they synthesise into the
-      // buffer themselves and there is no earlier point to read.
+      // `playback.lastPeak` is computed inside the file callback, which
+      // reads from the decoder *upstream* of the effect chain. So for a
+      // file source this reports the dry signal: gain set to -60 dB
+      // still meters unchanged, and the self-check's "effects are in the
+      // signal path" assertions cannot pass no matter what the DSP does.
+      //
+      // Preferring `stream.peakLevel` looked like the fix — it is read
+      // after the chain — but it made things worse: playback metering
+      // stopped crossing the harness's signal threshold at all and the
+      // check hung rather than failing. Whatever that property reports,
+      // it is not a comparable post-chain amplitude.
+      //
+      // Reverted deliberately. A correct fix needs a tap between the
+      // chain and the output that Klarinet does not currently expose,
+      // so this is a backend gap rather than a line to tweak. The
+      // consequence is scoped: effects on Android file sources cannot be
+      // *verified by measurement* here. Generators are unaffected —
+      // they synthesise into the buffer and own their peak.
       val peak = entry.generator?.lastPeak
-        ?: entry.stream.peakLevel.takeIf { it > 0f }
         ?: entry.playback?.lastPeak
-        ?: 0f
+        ?: entry.stream.peakLevel
       // Klarinet reports a single peak rather than per-channel levels, and
       // RMS is approximated from it; a true stereo RMS would need a tap that
       // the SDK does not expose.

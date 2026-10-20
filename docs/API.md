@@ -340,9 +340,23 @@ integer parameter IDs — so parity is reported, not assumed.
 | delay `tone` | ✅ | ❌ no damping stage |
 | delay `pingPong` | ✅ | ❌ |
 | per-source pan | ✅ any source | generators only |
+| metering a file source | post-chain | **pre-chain** (see below) |
 
 Call `getCapabilities()` or check a descriptor's `platforms` before offering
 something. `EffectRack` greys unavailable effects out on its own.
+
+### Android file metering reads pre-effect
+
+`onLevels` for an Android **file** source reports the signal as it comes
+off the decoder, before the effect chain. Measured on an API 36 emulator:
+a gain set to −60 dB leaves the reported level unchanged. Generators are
+unaffected.
+
+This is a Klarinet gap — there is no exposed tap between the chain and the
+output — not a tweakable line. Do not build a gain-reduction readout or an
+effect-is-working indicator on Android file levels. Peak/RMS for a file
+source is still correct as a *source* level, which is what a load meter or
+an input VU wants.
 
 Generators also differ by construction: iOS uses AudioKit wavetables, Android
 uses PolyBLEP. They anti-alias differently at high frequencies and **will not

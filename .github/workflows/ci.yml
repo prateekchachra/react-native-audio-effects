@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Lets a feature branch be checked before a PR exists. CI sat unrun for
+  # most of this project's life because nothing triggered it off main.
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

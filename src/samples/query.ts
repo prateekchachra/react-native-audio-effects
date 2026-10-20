@@ -135,11 +135,6 @@ const CHARACTER = new Set([
   'muddy',
   'clean',
   'dirty',
-  'analog',
-  'analogue',
-  'digital',
-  'vintage',
-  'modern',
   'smooth',
   'rough',
   'heavy',
@@ -150,16 +145,70 @@ const CHARACTER = new Set([
   'airy',
   'mellow',
   'aggressive',
+]);
+
+/**
+ * Genre and instrument words, which must survive into the query.
+ *
+ * These were originally lumped in with the adjectives above and dropped
+ * as fluff, which is how "snare one shot for an ambient song" ended up
+ * searching for "snare one shot" and returning jazz loops. To a producer
+ * the genre *is* the request — it carries more intent than the
+ * instrument half the time.
+ *
+ * They are still droppable, but last, and only after every texture word
+ * has already gone.
+ */
+const GENRE = new Set([
   'ambient',
+  'lofi',
+  'lo-fi',
+  'jazz',
+  'house',
+  'techno',
+  'trap',
+  'drill',
+  'dnb',
+  'jungle',
+  'garage',
+  'funk',
+  'soul',
+  'disco',
+  'cinematic',
+  'orchestral',
+  'folk',
+  'rock',
+  'metal',
+  'punk',
+  'indie',
+  'pop',
+  'hiphop',
+  'rnb',
+  'reggae',
+  'dub',
+  'afrobeat',
+  'latin',
+  'classical',
+  'choral',
+  'vintage',
+  'modern',
+  'analog',
+  'analogue',
+  'digital',
   'dreamy',
   'ethereal',
   'organic',
   'synthetic',
 ]);
 
-/** Whether a term only describes character, not what the sound is. */
+/** Whether a term only describes texture, not what the sound is. */
 export function isCharacterWord(word: string): boolean {
   return CHARACTER.has(word.toLowerCase());
+}
+
+/** Whether a term names a genre or style. Kept in the query far longer. */
+export function isGenreWord(word: string): boolean {
+  return GENRE.has(word.toLowerCase());
 }
 
 /** Terms whose presence implies a loop, and the reverse. */
@@ -256,7 +305,16 @@ export function parseSampleRequest(prompt: string): SampleQuery {
   // Remove the key's own text as well as the structured fields: leaving
   // "f#m" in the terms made it an AND filter *and* a repeated extra.
   const keyText = keyMatch?.[0]?.toLowerCase();
-  const terms = lower
+  // Drop the words that only signalled loop-vs-one-shot. They are
+  // captured in `loop` already, and leaving them in makes Openverse AND
+  // on "one" and "shot", which matches any title containing "shot".
+  const typeWords = wantsOneShot ? ONESHOT_WORDS : wantsLoop ? LOOP_WORDS : [];
+  let stripped = lower;
+  for (const word of typeWords) {
+    stripped = stripped.split(word).join(' ');
+  }
+
+  const terms = stripped
     // Strip what the structured fields already captured, so "90bpm" does
     // not also go into the text query and exclude everything untagged.
     .replace(BPM_PATTERN, ' ')

@@ -108,3 +108,32 @@ describe('parseSampleRequest', () => {
     );
   });
 });
+
+describe('the jazz-loop regression', () => {
+  // "snare one shot for an ambient song" returned jazz loops. Two causes,
+  // one test each.
+  const query = parseSampleRequest('snare one shot for an ambient song');
+
+  it('keeps the genre, which carries most of the intent', () => {
+    expect(query.terms).toContain('ambient');
+  });
+
+  it('strips the type words it already captured structurally', () => {
+    // Left in, Openverse ANDs on "one" and "shot" and matches any title
+    // containing "shot" — which is where the jazz came from.
+    expect(query.terms).not.toContain('shot');
+    expect(query.terms).not.toContain('one');
+    expect(query.loop).toBe(false);
+  });
+
+  it('reduces to just the instrument and the genre', () => {
+    expect(query.terms.split(/\s+/).sort()).toEqual(['ambient', 'snare']);
+  });
+
+  it('treats a loop request the same way', () => {
+    const loop = parseSampleRequest('gritty lofi drum loop');
+    expect(loop.loop).toBe(true);
+    expect(loop.terms).not.toContain('loop');
+    expect(loop.terms).toContain('lofi');
+  });
+});

@@ -20,7 +20,9 @@ describe('queryVariants', () => {
       parseSampleRequest('lofi drum loop at 90bpm')
     );
 
-    expect(variants).toContain('lofi drum loop');
+    // "loop" is no longer a search term: it is captured as `loop: true`
+    // and stripped, so it cannot AND away untagged results.
+    expect(variants).toContain('lofi drum');
   });
 
   it('drops character adjectives before anything else', () => {
@@ -28,8 +30,8 @@ describe('queryVariants', () => {
       parseSampleRequest('gritty dusty drum loop')
     );
 
-    expect(variants).toContain('drum loop');
-    expect(variants.indexOf('drum loop')).toBeGreaterThan(0);
+    expect(variants).toContain('drum');
+    expect(variants.indexOf('drum')).toBeGreaterThan(0);
   });
 
   it('keeps the instrument when the adjectives come last', () => {
@@ -118,5 +120,18 @@ describe('attributionFor', () => {
     });
 
     expect(credit).not.toContain('undefined');
+  });
+});
+
+describe('genre survives relaxation longer than texture', () => {
+  it('drops the texture adjective before the genre', () => {
+    const variants = queryVariants(
+      parseSampleRequest('gritty ambient snare one shot')
+    );
+    const withoutTexture = variants.indexOf('ambient snare');
+    const withoutGenre = variants.indexOf('snare');
+
+    expect(withoutTexture).toBeGreaterThan(-1);
+    expect(withoutGenre).toBeGreaterThan(withoutTexture);
   });
 });

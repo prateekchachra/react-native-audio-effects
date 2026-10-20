@@ -1,3 +1,5 @@
+<img src="assets/logo.svg" alt="react-native-audio-effects" width="420">
+
 # react-native-audio-effects
 
 Real-time audio effects, generators and plugin-style controls for React

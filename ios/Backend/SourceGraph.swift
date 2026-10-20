@@ -92,15 +92,6 @@ final class SourceGraph {
 
    It is also what the root mixer listens to, not `output`.
    */
-  /**
-   Stereo placement for the whole source.
-
-   Sits after the effect chain and before the meter, so it is never touched
-   by a structural edit and a unison stack can spread itself across the
-   field without each voice needing its own pan effect.
-   */
-  private(set) var panner: Panner!
-
   private(set) var meter: Fader!
 
   /**
@@ -141,9 +132,24 @@ final class SourceGraph {
   /// apart from the first and retriggered.
   private(set) var isGateOpen = false
 
-  /// Place the source in the stereo field. -1 hard left, 1 hard right.
+  /**
+   Place the source in the stereo field. -1 hard left, 1 hard right.
+
+   Written on the output mixer rather than through a dedicated pan node.
+   Inserting one between the chain and the meter crashed on every
+   structural edit — AVAudioEngine raised
+
+       required condition is false:
+       GetOutputConnectionPointsForNode: [_nodes containsObject: node]
+
+   because a rebuild detaches and reconnects around that point and the
+   inserted node was left out of the sequence. `Mixer` already conforms
+   to AVAudioMixing, so the placement costs no node at all and a rebuild
+   has nothing extra to lose track of. It still lands after the effect
+   chain, which is what a source-level pan should do.
+   */
   func setPan(_ value: Float) {
-    panner.pan = max(-1, min(1, value))
+    output.pan = max(-1, min(1, value))
   }
 
   private(set) var slots: [EffectSlot] = []
@@ -191,8 +197,7 @@ final class SourceGraph {
     self.engine = engine
     self.file = player.file
     self.head = Fader(player, gain: 1)
-    self.panner = Panner(output)
-    self.meter = Fader(self.panner, gain: 1)
+    self.meter = Fader(output, gain: 1)
     rebuild()
   }
 
@@ -206,8 +211,7 @@ final class SourceGraph {
     self.file = nil
     self.envelope = AmplitudeEnvelope(generator.node)
     self.head = Fader(self.envelope!, gain: 1)
-    self.panner = Panner(output)
-    self.meter = Fader(self.panner, gain: 1)
+    self.meter = Fader(output, gain: 1)
     rebuild()
   }
 
@@ -279,6 +283,26 @@ final class SourceGraph {
   }
 
   /// Recreate every effect node in order and reconnect the chain.
+  /**
+   Whether a node is still attached to the engine.
+
+   `Mixer.removeInput` asks AVAudioEngine for the node's output
+   connection points, and the engine asserts rather than returning
+   nothing if the node is not attached:
+
+       required condition is false:
+       GetOutputConnectionPointsForNode: [_nodes containsObject: node]
+
+   A node can already be gone by the time a later rebuild tries to
+   unlink it — a voice stack rebuilds once per voice, so the same tail
+   is revisited repeatedly. Checking first turns a crash into a no-op,
+   which is correct either way: a detached node is already not an input.
+   */
+  private func isAttached(_ node: Node) -> Bool {
+    guard let avEngine = engine?.avEngine else { return false }
+    return avEngine.attachedNodes.contains(node.avAudioNode)
+  }
+
   private func rebuild() {
     // The tap is deliberately left attached. `output` is the same Mixer
     // object across every rebuild, so the tap stays valid — and tearing it
@@ -308,7 +332,7 @@ final class SourceGraph {
     // Add before removing: letting `output` drop to zero inputs collapses
     // its render chain and it does not recover.
     output.addInput(current)
-    if let previousTail, previousTail !== current {
+    if let previousTail, previousTail !== current, isAttached(previousTail) {
       output.removeInput(previousTail)
     }
     currentTail = current

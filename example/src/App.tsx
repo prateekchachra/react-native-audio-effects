@@ -32,6 +32,8 @@ type TabKey = (typeof TABS)[number]['key'];
  */
 const RUN_SELF_CHECK_ON_LAUNCH = false;
 
+
+
 export default function App() {
   const [tab, setTab] = useState<TabKey>('studio');
   // Mounted once at the root: the engine owns the audio device, so starting

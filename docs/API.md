@@ -25,6 +25,7 @@ Reanimated, Gesture Handler and SVG.
 - [Hooks](#hooks)
 - [Schema](#schema) — the single source of truth
 - [UI kit](#ui-kit)
+- [Adding a method to the native module](#adding-a-method-to-the-native-module)
 - [Errors](#errors)
 - [Platform differences](#platform-differences)
 
@@ -158,6 +159,17 @@ A voice pool over generator sources.
 index** — the flattest voice sits furthest left. That correlation is what makes
 a stack read as *wide*; detune alone just beats in the middle.
 
+Both are live: `setUnisonSpread` and `setUnisonPan` affect notes already held.
+
+**Unison divides polyphony, it does not multiply voices.** Asking for 8 voices
+at 4× unison gives you 2 notes of real polyphony, not 32 sources. This is a
+hard limit (8 sources) rather than a preference: each source is roughly six
+native nodes before any effect is attached, every effect adds one *per voice*,
+and AVAudioEngine stops working somewhere past a hundred attached nodes —
+measured, it died at 106. Hardware synths behave the same way for the same
+reason. `maxVoices` is lowered to match so the voice allocator never promises
+a note the pool cannot supply.
+
 ---
 
 ## LFO
@@ -223,6 +235,40 @@ about it and leaves it alone.
 | `find` | `(prompt: string, signal?) => Promise<SampleSearch>` |
 | `load` | `(result: SampleResult) => Promise<LoadedSample>` |
 | `fetch` | `(prompt: string, signal?) => Promise<LoadedSample>` — find + load top hit |
+
+`find` takes a third argument, `onProgress(terms)`, called with each query
+variant as it is tried — worth wiring to a status line, because a search can
+legitimately take a few seconds.
+
+`SampleAgentOptions.budgetMs` caps a whole search; the default is
+`SEARCH_BUDGET_MS` (12s).
+
+### Why the search is shaped the way it is
+
+Openverse does not degrade, it stalls: measured, a healthy response is ~60ms
+and an unhealthy one hangs until the client gives up. There is no slow-but-
+working middle to wait for. So requests are **hedged** — if one has not
+answered in 400ms a second goes out alongside it and the first to return wins.
+That turned 12-second timeouts into ~100ms responses against the same API in
+the same minute.
+
+Openverse also **ANDs** its search terms, so every extra word is a filter that
+can empty the result set. `search` therefore walks from the most specific
+phrasing to the least until something comes back, dropping terms in order of
+how little they carry:
+
+1. everything the user said, plus tempo and key
+2. the same without tempo and key
+3. without texture adjectives — `gritty`, `warm`, `dusty`
+4. without genre — `ambient`, `lofi`, `jazz`
+
+Genre goes last on purpose. To a producer it often carries more of the request
+than the instrument does.
+
+Words that map to a structured field — tempo, key, `loop`/`one shot` — are
+**removed from the text query** once captured, or they would AND against
+untagged results. A stated one-shot also implies a 3-second length cap, since
+length is the only signal that reliably separates a one-shot from a loop.
 
 Standalone: `parseSampleRequest(prompt)`, `search(query, options)`,
 `buildSearchParams(terms, options)`, `attributionFor(result)`.
@@ -361,6 +407,19 @@ integer parameter IDs — so parity is reported, not assumed.
 
 Call `getCapabilities()` or check a descriptor's `platforms` before offering
 something. `EffectRack` greys unavailable effects out on its own.
+
+### Metering goes stale after a chain change (iOS)
+
+`onLevels` stops updating for a source after an effect is added or removed.
+AVAudioEngine drops installed taps when the graph is reconfigured.
+
+Re-arming the tap is the obvious fix and it is the wrong one: doing so silences
+playback outright. That is a known hazard in this codebase with its own earlier
+fix, and it was reintroduced and reverted again today. A correct fix needs a
+metering path that does not install or remove taps on a live graph.
+
+Levels are correct until the first structural edit. Do not build anything
+load-bearing on them after that.
 
 ### Android file metering reads pre-effect
 

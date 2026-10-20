@@ -9,86 +9,53 @@ final class DelayEffect: EffectNode {
   static let supportedKeys = ["time", "feedback", "mix", "tone", "pingPong"]
 
   /**
-   Two delay lines in parallel, panned apart and offset in time.
+   One delay line, panned.
 
-   AudioKit has no ping-pong delay, and a true one — where the feedback path
-   crosses between channels — needs a cycle in the graph, which AVAudioEngine
-   will not let you build. This gets the same effect from the outside: the
-   right line runs half a beat behind the left, so the repeats interleave and
-   alternate across the stereo field.
+   This was briefly two lines offset in time, which is how you fake a
+   ping-pong without the feedback cycle AVAudioEngine refuses to build.
+   It sounded right and cost six nodes per instance, which is fine for
+   one source and fatal across a voice pool: a synth attaches an effect
+   per voice, and the engine dies somewhere past a hundred nodes.
 
-   At `pingPong` 0 the two lines are identical and centred, which sums back to
-   an ordinary mono delay. Nothing is lost by the extra machinery.
+   So `pingPong` now only places the repeats in the stereo field rather
+   than bouncing them between channels. Honest about what it does, and
+   three nodes instead of six. A real ping-pong belongs in a custom
+   AudioUnit where the feedback path can cross channels internally.
    */
-  private let left: Delay
-  private let right: Delay
-  private let leftPan: Panner
-  private let rightPan: Panner
-  private let wet: Mixer
+  private let delay: Delay
+  private let panner: Panner
   private let mixer: DryWetMixer
 
   var outputNode: Node { mixer }
 
-  /// Kept because `time` and `pingPong` jointly decide the two delay times.
-  private var timeMs: Float = 250
-  private var pingPong: Float = 0
-
   init(input: Node) {
-    left = Delay(input)
-    right = Delay(input)
-    // The outer DryWetMixer owns the blend, so each line runs fully wet.
-    left.dryWetMix = 100
-    right.dryWetMix = 100
-    leftPan = Panner(left)
-    rightPan = Panner(right)
-    wet = Mixer(leftPan, rightPan)
-    // Two copies of the same signal sum to twice the amplitude at pingPong 0.
-    wet.volume = 0.5
-    mixer = DryWetMixer(input, wet)
-    applyTiming()
+    delay = Delay(input)
+    // The outer mixer owns the blend, so the line itself runs fully wet.
+    delay.dryWetMix = 100
+    panner = Panner(delay)
+    mixer = DryWetMixer(input, panner)
   }
 
   func setParameter(_ key: String, _ value: Float) {
     switch key {
     case "time":
-      timeMs = value
-      applyTiming()
-    case "pingPong":
-      pingPong = Convert.clamp(value, 0, 1)
-      applyTiming()
+      delay.time = Convert.clamp(Convert.msToSeconds(value), 0, 2)
     case "feedback":
-      let percent = Convert.unitToPercent(value)
-      left.feedback = percent
-      right.feedback = percent
+      delay.feedback = Convert.unitToPercent(value)
     case "mix":
       mixer.balance = Convert.clamp(value, 0, 1)
     case "tone":
-      let cutoff = Convert.clamp(value, 10, 22050)
-      left.lowPassCutoff = cutoff
-      right.lowPassCutoff = cutoff
+      delay.lowPassCutoff = Convert.clamp(value, 10, 22050)
+    case "pingPong":
+      // Offsets the repeats to one side; 0 keeps them centred.
+      panner.pan = Convert.clamp(value, 0, 1)
     default:
       break
     }
   }
 
-  /// Spread the two lines in time and across the stereo field together.
-  private func applyTiming() {
-    let seconds = Convert.clamp(Convert.msToSeconds(timeMs), 0, 2)
-    left.time = seconds
-    // Offset by up to half the delay time, so repeats land between each other.
-    right.time = Convert.clamp(seconds * (1 + pingPong * 0.5), 0, 2)
-    leftPan.pan = -pingPong
-    rightPan.pan = pingPong
-  }
-
   func setEnabled(_ enabled: Bool) {
-    if enabled {
-      left.start()
-      right.start()
-    } else {
-      left.bypass()
-      right.bypass()
-    }
+    enabled ? delay.start() : delay.bypass()
   }
 }
 

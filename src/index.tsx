@@ -41,6 +41,7 @@ export {
   buildSearchParams,
   parseSampleRequest,
   search,
+  SEARCH_BUDGET_MS,
 } from './samples';
 export type {
   LoadedSample,

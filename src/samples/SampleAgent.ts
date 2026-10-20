@@ -46,6 +46,8 @@ export interface SampleAgentOptions {
   ) => Promise<SampleResult[]>;
   /** Results per search. */
   pageSize?: number;
+  /** Ceiling for a whole search, in milliseconds. */
+  budgetMs?: number;
   /** Restrict to licences that need no attribution. */
   publicDomainOnly?: boolean;
 }
@@ -71,7 +73,11 @@ export class SampleAgent {
   }
 
   /** Interpret a request and search for it. */
-  async find(prompt: string, signal?: AbortSignal): Promise<SampleSearch> {
+  async find(
+    prompt: string,
+    signal?: AbortSignal,
+    onProgress?: (terms: string) => void
+  ): Promise<SampleSearch> {
     const trimmed = prompt.trim();
     if (!trimmed) {
       throw new Error('Describe the sample you are looking for.');
@@ -82,6 +88,8 @@ export class SampleAgent {
     const results = await searcher(query, {
       pageSize: this.options.pageSize,
       publicDomainOnly: this.options.publicDomainOnly,
+      budgetMs: this.options.budgetMs,
+      onProgress,
       signal,
     });
     return { query, results };

@@ -19,12 +19,46 @@ import { isCharacterWord, type SampleQuery } from './query';
 
 const ENDPOINT = 'https://api.openverse.org/v1/audio/';
 
-/** Openverse occasionally returns an empty body; see {@link search}. */
-const MAX_ATTEMPTS = 2;
-const RETRY_DELAY_MS = 400;
-// Openverse is slow under load; 15s was short enough to abort real
-// searches during development.
-const REQUEST_TIMEOUT_MS = 25_000;
+/**
+ * Timing, chosen from measured behaviour rather than guessed.
+ *
+ * Openverse does not degrade gracefully: a healthy response comes back in
+ * about 60ms, and an unhealthy one hangs until the client gives up. Three
+ * consecutive probes measured 63ms, 30s (timeout), 30s (timeout). There is
+ * no middle ground to wait for.
+ *
+ * So the per-request timeout is short — two seconds is already thirty
+ * times a healthy response — and the budget is spent on retrying rather
+ * than on waiting. A long timeout buys nothing against a hung connection
+ * and costs the user the whole wait.
+ */
+const REQUEST_TIMEOUT_MS = 2_500;
+const MAX_ATTEMPTS = 3;
+
+/**
+ * How long to wait before firing a duplicate request.
+ *
+ * The hang is a property of the individual connection, not of the
+ * service — a request that stalls stays stalled while a fresh one
+ * alongside it returns normally. So rather than wait out a timeout and
+ * retry, this races: if the first request has not answered within the
+ * hedge delay, a second goes out and whichever answers first wins.
+ *
+ * 400ms is comfortably above a healthy 63ms response, so a working
+ * request is never duplicated, and far below the 2.5s timeout, so a
+ * stalled one is overtaken early instead of blocking the budget.
+ */
+const HEDGE_DELAY_MS = 400;
+
+/**
+ * Ceiling for an entire search, across every variant and retry.
+ *
+ * Without this the relaxation loop multiplies out: four variants times
+ * three attempts times the request timeout. The UI sat on "Searching…"
+ * for minutes. Bounding the whole operation matters more than bounding
+ * any single request.
+ */
+export const SEARCH_BUDGET_MS = 12_000;
 
 export interface SampleResult {
   readonly id: string;
@@ -54,6 +88,10 @@ export interface SearchOptions {
    */
   publicDomainOnly?: boolean;
   signal?: AbortSignal;
+  /** Ceiling for the whole search. Defaults to {@link SEARCH_BUDGET_MS}. */
+  budgetMs?: number;
+  /** Called with each query variant as it is tried, for a status line. */
+  onProgress?: (terms: string) => void;
 }
 
 /** Raw Openverse shape, narrowed at the boundary. */
@@ -218,25 +256,33 @@ const sleep = (ms: number) =>
  */
 async function fetchVariant(
   terms: string,
-  options: SearchOptions
+  options: SearchOptions,
+  deadline: number
 ): Promise<SampleResult[]> {
   const url = `${ENDPOINT}?${buildSearchParams(terms, options).toString()}`;
-  let lastError: Error | undefined;
+  const controllers: AbortController[] = [];
 
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    if (attempt > 0) {
-      await sleep(RETRY_DELAY_MS * attempt);
+  /** One request, abortable and bounded by both the timeout and deadline. */
+  const attempt = async (index: number): Promise<SampleResult[]> => {
+    if (index > 0) {
+      await sleep(HEDGE_DELAY_MS * index);
     }
-    // A caller-supplied signal must still win over the timeout.
-    const timeout = new AbortController();
-    const timer = setTimeout(() => timeout.abort(), REQUEST_TIMEOUT_MS);
-    const onAbort = () => timeout.abort();
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) {
+      throw new Error('Sample search timed out.');
+    }
+
+    const controller = new AbortController();
+    controllers.push(controller);
+    const window = Math.max(1, Math.min(REQUEST_TIMEOUT_MS, remaining));
+    const timer = setTimeout(() => controller.abort(), window);
+    const onAbort = () => controller.abort();
     options.signal?.addEventListener('abort', onAbort);
 
     try {
       const response = await fetch(url, {
         headers: { Accept: 'application/json' },
-        signal: timeout.signal,
+        signal: controller.signal,
       });
       if (!response.ok) {
         throw new Error(`Openverse returned HTTP ${response.status}.`);
@@ -250,21 +296,28 @@ async function fetchVariant(
       return raw
         .map((item) => toResult(item as RawResult))
         .filter((item): item is SampleResult => item !== undefined);
-    } catch (error) {
-      // A caller-initiated abort is not a transport hiccup; stop.
-      if (options.signal?.aborted) {
-        throw error;
-      }
-      lastError = error instanceof Error ? error : new Error(String(error));
     } finally {
       clearTimeout(timer);
       options.signal?.removeEventListener('abort', onAbort);
     }
-  }
+  };
 
-  throw new Error(
-    `Sample search failed after ${MAX_ATTEMPTS} attempts: ${lastError?.message}`
-  );
+  const hedged = Array.from({ length: MAX_ATTEMPTS }, (_, i) => attempt(i));
+  try {
+    // First success wins; rejects only if every hedge fails.
+    return await Promise.any(hedged);
+  } catch (error) {
+    if (error instanceof AggregateError) {
+      const first = error.errors[0];
+      throw first instanceof Error ? first : new Error(String(first));
+    }
+    throw error;
+  } finally {
+    // Whoever lost the race is still holding a socket open.
+    for (const controller of controllers) {
+      controller.abort();
+    }
+  }
 }
 
 /**
@@ -279,11 +332,38 @@ export async function search(
   query: SampleQuery,
   options: SearchOptions = {}
 ): Promise<SampleResult[]> {
+  const deadline = Date.now() + (options.budgetMs ?? SEARCH_BUDGET_MS);
+  let lastError: Error | undefined;
+
   for (const terms of queryVariants(query)) {
-    const results = withinDuration(await fetchVariant(terms, options), query);
-    if (results.length > 0) {
-      return results;
+    if (Date.now() >= deadline) {
+      break;
     }
+    options.onProgress?.(terms);
+    try {
+      const results = withinDuration(
+        await fetchVariant(terms, options, deadline),
+        query
+      );
+      if (results.length > 0) {
+        return results;
+      }
+    } catch (error) {
+      // One variant failing is not the search failing: the next is
+      // broader and may well succeed inside the remaining budget.
+      lastError = error instanceof Error ? error : new Error(String(error));
+    }
+  }
+
+  // Only surface an error if nothing was reachable. A genuine zero-result
+  // search is an answer, not a failure.
+  if (lastError && Date.now() >= deadline) {
+    throw new Error(
+      'Sample search timed out. Openverse is not responding — try again.'
+    );
+  }
+  if (lastError) {
+    throw lastError;
   }
   return [];
 }

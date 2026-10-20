@@ -2,6 +2,7 @@ export {
   attributionFor,
   buildSearchParams,
   search,
+  SEARCH_BUDGET_MS,
   type SampleResult,
   type SearchOptions,
 } from './openverse';

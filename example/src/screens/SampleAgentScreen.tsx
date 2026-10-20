@@ -52,7 +52,9 @@ export function SampleAgentScreen() {
       setStatus('Searching…');
       setResults([]);
       try {
-        const found = await agent.find(trimmed);
+        const found = await agent.find(trimmed, undefined, (terms) =>
+          setStatus(`Searching "${terms}"…`)
+        );
         setQuery(found.query);
         setResults([...found.results]);
         setStatus(

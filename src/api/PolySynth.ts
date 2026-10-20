@@ -120,6 +120,18 @@ export class VoiceStackEffect implements EffectLike {
  *   instead of re-attacking on every note.
  * - `portamento` — legato, plus the pitch glides rather than jumps.
  */
+/**
+ * Ceiling on simultaneously allocated voice sources.
+ *
+ * Not a musical limit but a graph one. AVAudioEngine starts failing
+ * somewhere past a hundred attached nodes, and each source contributes
+ * about six of them — oscillator, envelope, fader, panner, mixer, meter —
+ * before a single effect is added. Measured: sixteen sources reached 106
+ * attached nodes on their own and the first addEffect killed the engine.
+ * Eight keeps the pool near fifty and leaves room for a chain on top.
+ */
+const MAX_VOICE_SOURCES = 8;
+
 export type PlayMode = 'poly' | 'mono' | 'legato' | 'portamento';
 
 export interface PolySynthOptions {
@@ -190,8 +202,27 @@ export class PolySynth {
     };
 
     const synth = new PolySynth(resolved);
-    const needed =
+
+    // Unison divides the polyphony rather than multiplying the source
+    // count, which is how hardware behaves and, more importantly, is the
+    // difference between a working synth and a dead engine.
+    //
+    // Each source is several native nodes — oscillator, envelope, fader,
+    // panner, meter — and every effect adds one *per voice*. At
+    // 8 voices x 4 unison that is 32 sources, and a single delay across
+    // them pushed AVAudioEngine past 100 attached nodes and killed the
+    // app. Capping the pool bounds the graph no matter what the caller
+    // asks for.
+    const requested =
       (resolved.mode === 'poly' ? resolved.maxVoices : 1) * resolved.unison;
+    const needed = Math.min(requested, MAX_VOICE_SOURCES);
+
+    // Keep maxVoices honest: the allocator steals voices based on it, and
+    // it promising more notes than the pool can supply would mean a note
+    // silently failing to sound.
+    if (resolved.mode === 'poly') {
+      resolved.maxVoices = Math.max(1, Math.floor(needed / resolved.unison));
+    }
 
     for (let i = 0; i < needed; i++) {
       const source = await AudioEngine.createOscillator(resolved.waveform, {

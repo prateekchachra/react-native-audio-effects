@@ -144,10 +144,10 @@ export const DELAY: EffectDescriptor = {
       taper: 'linear',
       platforms: IOS_ONLY,
       description:
-        'Bounces the repeats between left and right. At 0 the delay is ' +
-        'centred and mono. Turning it up pans the two delay lines apart ' +
-        'and offsets one of them in time, so the echoes alternate across ' +
-        'the stereo field.',
+        'Offsets the repeats across the stereo field. At 0 they stay ' +
+        'centred. True channel-to-channel bouncing needs a feedback path ' +
+        'that crosses channels, which AVAudioEngine cannot express, so ' +
+        'this places the repeats rather than alternating them.',
     },
   ],
 };

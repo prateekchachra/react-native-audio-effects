@@ -140,7 +140,6 @@ final class AudioKitBackend {
       sources[id] = graph
       rootMixer.addInput(graph.meter)
       engine.rebuildGraph()
-      refreshAllMetering()
 
       return [
         "sourceId": id,
@@ -168,7 +167,6 @@ final class AudioKitBackend {
       sources[id] = graph
       rootMixer.addInput(graph.meter)
       engine.rebuildGraph()
-      refreshAllMetering()
       return id
     }
   }
@@ -184,7 +182,6 @@ final class AudioKitBackend {
       rootMixer.removeInput(graph.meter)
       graph.teardown()
       engine.rebuildGraph()
-      refreshAllMetering()
     }
   }
 
@@ -230,17 +227,17 @@ final class AudioKitBackend {
     }
   }
 
+  func setSourcePan(_ sourceId: Int, pan: Float) {
+    queue.sync {
+      sources[sourceId]?.setPan(pan)
+    }
+  }
+
   func setSourceVolume(_ sourceId: Int, volume: Float) {
     queue.sync {
       // The source's own fader, not the output mixer — the meter tap reads
       // the mixer, and writing volume there would make the meter lie.
       sources[sourceId]?.head.gain = min(max(volume, 0), 1)
-    }
-  }
-
-  func setSourcePan(_ sourceId: Int, pan: Float) {
-    queue.sync {
-      sources[sourceId]?.setPan(pan)
     }
   }
 
@@ -392,33 +389,8 @@ final class AudioKitBackend {
    */
   private func refreshMetering(_ graph: SourceGraph) {
     guard meteringEnabled else { return }
-    // Deferred, not immediate. AVAudioEngine drops installed taps when the
-    // graph is reconfigured, and re-installing in the same turn lands
-    // before the engine has finished settling — the tap attaches to a bus
-    // that is about to be replaced and never reports again. A short delay
-    // puts it back after the new graph is live.
-    queue.asyncAfter(deadline: .now() + Self.tapRearmDelay) { [weak graph] in
-      guard let graph else { return }
-      graph.stopMetering()
-      graph.startMetering()
-    }
-  }
-
-  /// Time for a reconfigured graph to settle before re-arming a tap.
-  private static let tapRearmDelay = 0.12
-
-  /**
-   Re-arm every live tap.
-
-   Adding or removing a source reconfigures the whole engine, so it is not
-   only the edited source that loses its tap — every other source's meter
-   goes deaf too.
-   */
-  private func refreshAllMetering() {
-    guard meteringEnabled else { return }
-    for graph in sources.values {
-      refreshMetering(graph)
-    }
+    graph.stopMetering()
+    graph.startMetering()
   }
 
   // MARK: - Metering

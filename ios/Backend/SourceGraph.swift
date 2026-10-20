@@ -135,18 +135,11 @@ final class SourceGraph {
   /**
    Place the source in the stereo field. -1 hard left, 1 hard right.
 
-   Written on the output mixer rather than through a dedicated pan node.
-   Inserting one between the chain and the meter crashed on every
-   structural edit — AVAudioEngine raised
-
-       required condition is false:
-       GetOutputConnectionPointsForNode: [_nodes containsObject: node]
-
-   because a rebuild detaches and reconnects around that point and the
-   inserted node was left out of the sequence. `Mixer` already conforms
-   to AVAudioMixing, so the placement costs no node at all and a rebuild
-   has nothing extra to lose track of. It still lands after the effect
-   chain, which is what a source-level pan should do.
+   A property on the existing output mixer, not a node. Inserting a
+   `Panner` between the chain and the meter crashed every structural
+   edit, and anything that changes the shape of this graph has a history
+   of silencing it. `Mixer` already conforms to AVAudioMixing, so this
+   costs nothing and cannot affect the topology.
    */
   func setPan(_ value: Float) {
     output.pan = max(-1, min(1, value))
@@ -283,26 +276,6 @@ final class SourceGraph {
   }
 
   /// Recreate every effect node in order and reconnect the chain.
-  /**
-   Whether a node is still attached to the engine.
-
-   `Mixer.removeInput` asks AVAudioEngine for the node's output
-   connection points, and the engine asserts rather than returning
-   nothing if the node is not attached:
-
-       required condition is false:
-       GetOutputConnectionPointsForNode: [_nodes containsObject: node]
-
-   A node can already be gone by the time a later rebuild tries to
-   unlink it — a voice stack rebuilds once per voice, so the same tail
-   is revisited repeatedly. Checking first turns a crash into a no-op,
-   which is correct either way: a detached node is already not an input.
-   */
-  private func isAttached(_ node: Node) -> Bool {
-    guard let avEngine = engine?.avEngine else { return false }
-    return avEngine.attachedNodes.contains(node.avAudioNode)
-  }
-
   private func rebuild() {
     // The tap is deliberately left attached. `output` is the same Mixer
     // object across every rebuild, so the tap stays valid — and tearing it
@@ -332,7 +305,7 @@ final class SourceGraph {
     // Add before removing: letting `output` drop to zero inputs collapses
     // its render chain and it does not recover.
     output.addInput(current)
-    if let previousTail, previousTail !== current, isAttached(previousTail) {
+    if let previousTail, previousTail !== current {
       output.removeInput(previousTail)
     }
     currentTail = current

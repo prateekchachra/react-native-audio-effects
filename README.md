@@ -1,4 +1,4 @@
-<img src="assets/logo.svg" alt="react-native-audio-effects" width="420">
+<img src="https://raw.githubusercontent.com/prateekchachra/react-native-audio-effects/main/assets/logo.svg" alt="react-native-audio-effects" width="420">
 
 # react-native-audio-effects
 

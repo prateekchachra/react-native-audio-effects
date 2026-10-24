@@ -1,97 +1,118 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+<img src="../assets/logo.svg" alt="react-native-audio-effects" width="360">
 
-# Getting Started
+# Example app
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+The demo for [`react-native-audio-effects`](../README.md). Three screens,
+each exercising a different part of the library against real audio.
 
-## Step 1: Start Metro
+It consumes the library from source, not from npm — Metro resolves
+`react-native-audio-effects` to `../src` through the
+`react-native-audio-effects-source` export condition. Editing library code
+and hot-reloading the app works.
 
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
+## Running it
 
-To start the Metro dev server, run the following command from the root of your React Native project:
-
-```sh
-# Using npm
-npm start
-
-# OR using Yarn
-yarn start
-```
-
-## Step 2: Build and run your app
-
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
-
-### Android
+From the **repository root**, not this directory:
 
 ```sh
-# Using npm
-npm run android
+yarn                      # installs both workspaces
+yarn example start        # Metro
 
-# OR using Yarn
-yarn android
+# in a second terminal
+yarn example ios
+yarn example android
 ```
 
-### iOS
-
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
-
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
+iOS needs pods first, and needs them again whenever the TurboModule spec
+changes — see [Changing the native API](#changing-the-native-api):
 
 ```sh
-bundle install
+cd example/ios && USE_FRAMEWORKS=dynamic RCT_NEW_ARCH_ENABLED=1 pod install
 ```
 
-Then, and every time you update your native dependencies, run:
+`USE_FRAMEWORKS=dynamic` is required. AudioKit is SPM-only and arrives
+through the podspec's `spm_dependency`, and Swift packages linked into
+static pods fail at link time.
 
-```sh
-bundle exec pod install
-```
+## The screens
 
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
+### Studio
 
-```sh
-# Using npm
-npm run ios
+Load a sound and build a chain on it. Eight samples ship with the app
+(`example/ios/Samples`, mirrored into Android assets) covering mp3, wav
+and aiff so the decode paths all get used, or import your own through
+`@react-native-documents/picker`.
 
-# OR using Yarn
-yarn ios
-```
+Add effects, reorder them, bypass them, and move the knobs while it plays.
+Waveform, playhead and level meters are live.
 
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
+### Generators
 
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
+Seven waveforms driven by an 88-key scrollable keyboard, with ADSR, play
+modes (poly, mono, legato, portamento), unison with detune and stereo
+width, an assignable LFO, and the full effect catalogue applied across the
+whole voice pool.
 
-## Step 3: Modify your app
+> **Start with a plucky patch.** The default is a sustained tone, and
+> time-based effects are nearly inaudible on one — a delay repeat lands on
+> top of a note that is still sounding, so you get comb filtering rather
+> than echoes. Set **Sustain to 0** with a short Decay and delay and reverb
+> become obvious. Filter, tremolo and chorus read fine on a held note.
 
-Now that you have successfully run the app, let's make changes!
+### Samples
 
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
+Ask for a sound in plain English — _"a gritty 90bpm lofi drum loop"_ — and
+it searches [Openverse](https://openverse.org), which needs no API key or
+account. Results open in a transport sheet with attribution; loading one
+downloads and decodes it natively, so it behaves like a local file and can
+take a chain like anything else.
 
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
+## Changing the native API
 
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
+Adding a method to `src/NativeAudioEffects.ts` means touching five places,
+and the fifth is easy to miss:
 
-## Congratulations! :tada:
+1. the spec
+2. `ios/AudioEffects.mm`
+3. `ios/AudioEffectsImpl.swift`
+4. `android/.../AudioEffectsModule.kt`
+5. **`pod install`** — regenerates the protocol codegen emits from the spec
 
-You've successfully run and modified your React Native App. :partying_face:
+Step 5 runs at `pod install` time, **not** during `xcodebuild`. Skip it and
+the method is invisible to JS even though all four hand-written layers are
+correct, failing as `undefined is not a function` — exactly like a missing
+bridge method. `src/__tests__/bridge-parity.test.ts` covers layers 1–4; if
+it passes and the call still fails at runtime, you are looking at step 5.
 
-### Now what?
+## Requirements and gotchas
 
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
+|              |                                                                                                                |
+| ------------ | -------------------------------------------------------------------------------------------------------------- |
+| iOS          | whatever React Native 0.88 requires — the podspec uses `min_ios_version_supported` rather than pinning its own |
+| Android      | minSdk 24, compileSdk 37                                                                                       |
+| Android ABIs | `arm64-v8a`, `armeabi-v7a`, `x86_64` — **no x86**                                                              |
+| Kotlin       | pinned to 2.4.20 in `android/build.gradle`                                                                     |
 
-# Troubleshooting
+**Kotlin version.** Klarinet is built with Kotlin 2.4 while React Native
+0.88 ships 2.2, so `resolutionStrategy` forces 2.4.20. Any app consuming
+this library needs the same pin.
 
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
+**Emulator ABI.** Klarinet publishes no x86 slice, so an x86 emulator image
+will fail to load the native library. Use arm64 on Apple silicon.
 
-# Learn More
+**Metro port.** Metro fails quietly if 8081 is already taken and the app
+then cannot load a bundle. `lsof -ti:8081 | xargs kill -9` before starting
+if the app reports "Unable to load script".
 
-To learn more about React Native, take a look at the following resources:
+## Known issues
 
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+- **Metering goes stale after a chain change (iOS).** Level meters stop
+  updating for a source once an effect is added or removed. AVAudioEngine
+  drops installed taps when the graph is reconfigured, and re-arming them
+  silences playback, so this is left alone deliberately.
+- **Android file metering reads pre-effect.** Levels for a file source are
+  measured before the chain, so effects do not move the meter. Generators
+  are unaffected.
+
+Both are described in [docs/API.md](../docs/API.md#platform-differences).
+Neither affects audio, only the numbers reported about it.

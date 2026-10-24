@@ -15,7 +15,7 @@
  * {@link attributionFor} formats a usable credit line.
  */
 
-import { isCharacterWord, type SampleQuery } from './query';
+import { isCharacterWord, isGenreWord, type SampleQuery } from './query';
 
 const ENDPOINT = 'https://api.openverse.org/v1/audio/';
 
@@ -140,18 +140,19 @@ export function queryVariants(query: SampleQuery): string[] {
   const words = base.split(/\s+/).filter(Boolean);
   const relaxed: string[] = [];
 
-  // Drop character adjectives first: they narrow hard and are the least
-  // likely to appear in an uploader's title. What remains names the
-  // instrument, which is the part that has to match.
-  const substantive = words.filter((word) => !isCharacterWord(word));
-  if (substantive.length > 0 && substantive.length < words.length) {
-    relaxed.push(substantive.join(' '));
+  // Drop texture adjectives first — "gritty", "warm". They narrow hard
+  // and are the least likely to appear in an uploader's title.
+  const withoutTexture = words.filter((word) => !isCharacterWord(word));
+  if (withoutTexture.length > 0 && withoutTexture.length < words.length) {
+    relaxed.push(withoutTexture.join(' '));
   }
 
-  // Last resort: the final two words, which in an English noun phrase
-  // usually carry the head — "drum loop", "vinyl crackle".
-  if (words.length > 2) {
-    relaxed.push(words.slice(-2).join(' '));
+  // Genre goes only after that, and only if something is still left.
+  // "ambient" is most of the intent in "snare for an ambient song", so
+  // it should be the last thing surrendered, not the first.
+  const withoutGenre = withoutTexture.filter((word) => !isGenreWord(word));
+  if (withoutGenre.length > 0 && withoutGenre.length < withoutTexture.length) {
+    relaxed.push(withoutGenre.join(' '));
   }
 
   // Longest first, so the fallbacks still run most to least specific.
@@ -211,17 +212,32 @@ function toResult(raw: RawResult): SampleResult | undefined {
   };
 }
 
+/**
+ * Longest a one-shot can plausibly be.
+ *
+ * Asking for a one shot and being handed a four-minute loop is the
+ * clearest way the search can be wrong, and length is the one signal
+ * that separates them reliably — Openverse has no field for it. Three
+ * seconds covers a long reverbed cymbal and excludes anything looping.
+ */
+const ONE_SHOT_MAX_SEC = 3;
+
 /** Keep only results inside the requested duration window. */
 function withinDuration(
   results: SampleResult[],
   query: SampleQuery
 ): SampleResult[] {
-  if (
-    query.minDurationSec === undefined &&
-    query.maxDurationSec === undefined
-  ) {
+  // A stated one-shot implies a length bound even when the user gave
+  // no number, which is almost always.
+  const maxSec =
+    query.maxDurationSec ??
+    (query.loop === false ? ONE_SHOT_MAX_SEC : undefined);
+  const minSec = query.minDurationSec;
+
+  if (minSec === undefined && maxSec === undefined) {
     return results;
   }
+  query = { ...query, minDurationSec: minSec, maxDurationSec: maxSec };
   return results.filter((result) => {
     // A result with no reported duration is kept: excluding it would
     // silently drop valid samples for missing metadata.

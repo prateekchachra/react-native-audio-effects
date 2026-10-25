@@ -9,7 +9,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   EFFECTS,
-  ENVELOPE_PARAMS,
   GENERATORS,
   LFO,
   PolySynth,
@@ -26,6 +25,7 @@ import {
 import type { Waveform } from 'react-native-audio-effects';
 import {
   EffectRack,
+  EnvelopeEditor,
   Keyboard,
   Knob,
   LFOPanel,
@@ -325,17 +325,16 @@ export function GeneratorsScreen() {
       </View>
 
       <Text style={styles.subheading}>Envelope</Text>
-      <View style={styles.adsrRow}>
-        {ENVELOPE_PARAMS.map((param) => (
-          <Knob
-            key={param.key}
-            param={param}
-            value={envelope[param.key] ?? param.default}
-            onChange={(value) => setEnvelopeParam(param.key, value)}
-            size={60}
-          />
-        ))}
-      </View>
+      <Text style={styles.hintLine}>
+        Drag the handles. Pull Sustain to the floor and shorten Decay for a
+        pluck — time-based effects like delay and reverb only read clearly
+        on a patch that actually stops.
+      </Text>
+      <EnvelopeEditor
+        values={envelope}
+        onChange={setEnvelopeParam}
+        theme={darkTheme}
+      />
 
       {isPitched ? (
         <>

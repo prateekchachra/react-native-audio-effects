@@ -342,15 +342,38 @@ curve, unit and formatting for free. Never hard-code a min and max.
 From `react-native-audio-effects/ui`:
 
 `Knob` · `EffectSlider` · `XYPad` · `LevelMeter` · `WaveformView` · `Keyboard`
-(88-key, scrollable) · `EffectRack` / `EffectPanel` · `LFOPanel` · `PresetBar`
-(session A/B) · `PresetPanel` (persistent saving) · `ThemeProvider` ·
-`useAudioTheme` · `darkTheme` · `lightTheme`
+(88-key, scrollable) · `EnvelopeEditor` (draggable ADSR) · `EffectRack` /
+`EffectPanel` · `LFOPanel` · `PresetBar` (session A/B) · `PresetPanel`
+(persistent saving) · `ThemeProvider` · `useAudioTheme` · `darkTheme` ·
+`lightTheme`
 
 Every control takes a `ParamDescriptor`. `EffectRack` generates an entire
 plugin panel from the schema — that is the payoff for one source of truth.
 
 Knob gestures run on the **UI thread** via Reanimated worklets, so the control
 stays smooth while JS is busy, and writes coalesce to one call per frame.
+
+### `EnvelopeEditor`
+
+```tsx
+<EnvelopeEditor values={envelope} onChange={(key, value) => ...} />
+```
+
+Four handles over the ADSR shape: attack and release drag horizontally,
+decay horizontally, sustain vertically. Values come straight from
+`ENVELOPE_PARAMS`, so the ranges and tapers match the knobs they replace.
+
+Two deliberate departures from `Knob`. It runs on the **JS thread**, because
+the geometry needs `toNormalized`/`fromNormalized` from the schema and those
+are not worklets — see the trap below. And each stage is drawn proportional
+to its *tapered* position in its own range rather than on a shared time axis,
+because attack spans 1 ms to 4 s and a 1 ms attack on a linear axis is a
+subpixel sliver you cannot grab.
+
+Built on `react-native-svg`, which the kit already depends on. An envelope
+redraws only when a handle moves, so it does not need a canvas renderer; a
+live oscilloscope or spectrum view would, and that is where something like
+Skia would earn its place.
 
 > One trap, learned the hard way: a `'worklet'` that calls another worklet
 > crashes with `undefined is not a function` when the same function is also

@@ -1,5 +1,6 @@
 import { describe, expect, it } from '@jest/globals';
 
+import { ENVELOPE_PARAMS } from '../generators';
 import {
   detune,
   frequencyToMidi,
@@ -164,6 +165,40 @@ describe('unisonPans', () => {
     for (let i = 1; i < voices; i++) {
       expect(offsets[i]!).toBeGreaterThan(offsets[i - 1]!);
       expect(pans[i]!).toBeGreaterThan(pans[i - 1]!);
+    }
+  });
+});
+
+describe('ENVELOPE_PARAMS', () => {
+  // EnvelopeEditor indexes these four keys directly to place its handles.
+  // If one is renamed or dropped the editor loses a handle silently, so
+  // the contract is asserted here rather than discovered on a device.
+  it('has exactly attack, decay, sustain and release', () => {
+    expect(ENVELOPE_PARAMS.map((param) => param.key).sort()).toEqual([
+      'attack',
+      'decay',
+      'release',
+      'sustain',
+    ]);
+  });
+
+  it('keeps sustain a level and the rest times', () => {
+    const byKey = Object.fromEntries(
+      ENVELOPE_PARAMS.map((param) => [param.key, param])
+    );
+    expect(byKey.sustain!.unit).toBe('%');
+    for (const key of ['attack', 'decay', 'release']) {
+      expect(byKey[key]!.unit).toBe('ms');
+    }
+  });
+
+  it('gives every stage a usable range for a proportional axis', () => {
+    // The editor maps each stage across its own width using the taper,
+    // so a zero-width range would make that handle ungrabbable.
+    for (const param of ENVELOPE_PARAMS) {
+      expect(param.max).toBeGreaterThan(param.min);
+      expect(param.default).toBeGreaterThanOrEqual(param.min);
+      expect(param.default).toBeLessThanOrEqual(param.max);
     }
   });
 });

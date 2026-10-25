@@ -20,6 +20,9 @@ export type { EffectPanelProps, EffectRackProps } from './EffectRack';
 export { EffectSlider } from './EffectSlider';
 export type { EffectSliderProps } from './EffectSlider';
 
+export { EnvelopeEditor } from './EnvelopeEditor';
+export type { EnvelopeEditorProps, EnvelopeKey } from './EnvelopeEditor';
+
 export { Keyboard } from './Keyboard';
 export type { KeyboardProps } from './Keyboard';
 

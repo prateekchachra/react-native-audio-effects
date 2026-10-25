@@ -2,6 +2,12 @@
 
 # react-native-audio-effects
 
+[![npm version](https://img.shields.io/npm/v/react-native-audio-effects.svg?color=7c5cff)](https://www.npmjs.com/package/react-native-audio-effects)
+[![npm downloads](https://img.shields.io/npm/dm/react-native-audio-effects.svg?color=7c5cff)](https://www.npmjs.com/package/react-native-audio-effects)
+[![license](https://img.shields.io/npm/l/react-native-audio-effects.svg?color=7c5cff)](./LICENSE)
+[![platforms](https://img.shields.io/badge/platforms-iOS%20%7C%20Android-7c5cff.svg)](#what-runs-where)
+[![New Architecture](https://img.shields.io/badge/New%20Architecture-TurboModule-7c5cff.svg)](https://reactnative.dev/architecture/landing-page)
+
 Real-time audio effects, generators and plugin-style controls for React
 Native's New Architecture.
 

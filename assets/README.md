@@ -3,8 +3,14 @@
 `icon.svg` — the app icon, a tile. `logo.svg` — the README lockup, which
 uses `currentColor` for the wordmark so it reads on a light or dark page.
 
-Neither ships to npm: `files` in `package.json` is an allowlist and does
-not include this directory.
+`scope-chord-1.png`, `scope-chord-2.png` — the same chord three seconds
+apart, which is how a still shows that the trace moves. Captured from the
+example app on an iPhone 17 Pro and downscaled to 349px wide, since the
+README renders them at 300 and the @3x originals were ten times the size.
+
+None of this ships to npm: `files` in `package.json` is an allowlist and
+does not include this directory. The README therefore has to reference
+them by absolute `raw.githubusercontent.com` URL, or they break on npm.
 
 ## Regenerating the example app's icons
 

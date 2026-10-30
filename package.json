@@ -1,6 +1,6 @@
 {
   "name": "react-native-audio-effects",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Professional audio effects, generators and plugin-style UI controls for React Native",
   "main": "./lib/module/index.js",
   "types": "./lib/typescript/src/index.d.ts",
@@ -14,6 +14,11 @@
       "react-native-audio-effects-source": "./src/ui/index.tsx",
       "types": "./lib/typescript/src/ui/index.d.ts",
       "default": "./lib/module/ui/index.js"
+    },
+    "./scope": {
+      "react-native-audio-effects-source": "./src/scope/index.tsx",
+      "types": "./lib/typescript/src/scope/index.d.ts",
+      "default": "./lib/module/scope/index.js"
     },
     "./package.json": "./package.json"
   },
@@ -87,6 +92,7 @@
     "@react-native/babel-preset": "0.88.0",
     "@react-native/eslint-config": "0.86.2",
     "@react-native/jest-preset": "0.86.2",
+    "@shopify/react-native-skia": "2.14.0",
     "@types/react": "^19.2.0",
     "del-cli": "^7.0.0",
     "eslint": "^9.39.5",
@@ -107,6 +113,7 @@
   },
   "peerDependencies": {
     "@react-native-documents/picker": ">=10.0.0",
+    "@shopify/react-native-skia": ">=2.0.0",
     "react": "*",
     "react-native": "*",
     "react-native-gesture-handler": ">=2.16.0",
@@ -116,6 +123,9 @@
   },
   "peerDependenciesMeta": {
     "@react-native-documents/picker": {
+      "optional": true
+    },
+    "@shopify/react-native-skia": {
       "optional": true
     },
     "react-native-gesture-handler": {

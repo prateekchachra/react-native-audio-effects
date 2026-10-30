@@ -8,6 +8,9 @@ import {
   midiToFrequency,
   noteName,
   octaveStart,
+  PIANO_HIGHEST,
+  PIANO_LOWEST,
+  SEMITONES_PER_OCTAVE,
   unisonOffsets,
   unisonPans,
 } from '../music';
@@ -40,6 +43,50 @@ describe('midiToFrequency', () => {
   it('treats a non-positive frequency as note zero rather than returning NaN', () => {
     expect(frequencyToMidi(0)).toBe(0);
     expect(frequencyToMidi(-5)).toBe(0);
+  });
+});
+
+describe('the piano range', () => {
+  // Keyboard lays its keys out across this and OscillatorScope spreads
+  // its scroll speed across it. They have to mean the same thing, which
+  // is why the numbers live in the schema rather than in either of them.
+  it('is the 88 keys of a piano, A0 to C8', () => {
+    expect(noteName(PIANO_LOWEST)).toBe('A0');
+    expect(noteName(PIANO_HIGHEST)).toBe('C8');
+    expect(PIANO_HIGHEST - PIANO_LOWEST + 1).toBe(88);
+  });
+
+  it('runs from 27.5 Hz to a shade over 4 kHz', () => {
+    expect(midiToFrequency(PIANO_LOWEST)).toBeCloseTo(27.5, 4);
+    expect(midiToFrequency(PIANO_HIGHEST)).toBeCloseTo(4186.01, 1);
+  });
+
+  it('spans a factor of about 152, which is why speed maps in octaves', () => {
+    const span = midiToFrequency(PIANO_HIGHEST) / midiToFrequency(PIANO_LOWEST);
+    expect(span).toBeCloseTo(152.2, 1);
+    // The same span is only ~7.25 octaves — the compression the scope relies on.
+    expect(Math.log2(span)).toBeCloseTo(7.25, 2);
+  });
+});
+
+describe('SEMITONES_PER_OCTAVE', () => {
+  it('is the root taken in equal temperament', () => {
+    expect(SEMITONES_PER_OCTAVE).toBe(12);
+    expect(
+      Math.pow(midiToFrequency(61) / midiToFrequency(60), SEMITONES_PER_OCTAVE)
+    ).toBeCloseTo(2, 10);
+  });
+
+  it('is the step that makes a MIDI number the log of its own pitch', () => {
+    // What lets OscillatorScope map speed linearly in semitones and get a
+    // logarithmic curve in hertz for free.
+    for (const midi of [21, 45, 60, 69, 100]) {
+      expect(frequencyToMidi(midiToFrequency(midi))).toBeCloseTo(midi, 8);
+      expect(midiToFrequency(midi + SEMITONES_PER_OCTAVE)).toBeCloseTo(
+        midiToFrequency(midi) * 2,
+        6
+      );
+    }
   });
 });
 

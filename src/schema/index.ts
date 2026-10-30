@@ -77,6 +77,9 @@ export {
   octaveStart,
   unisonOffsets,
   unisonPans,
+  PIANO_HIGHEST,
+  PIANO_LOWEST,
+  SEMITONES_PER_OCTAVE,
 } from './music';
 
 import { EFFECTS } from './effects';

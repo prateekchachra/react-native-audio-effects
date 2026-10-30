@@ -16,6 +16,7 @@ import {
   envelopeDefaults,
   getGenerator,
   isEffectAvailable,
+  midiToFrequency,
   noteName,
   type EffectType,
   type ParamDescriptor,
@@ -32,6 +33,7 @@ import {
   PresetPanel,
   darkTheme,
 } from 'react-native-audio-effects/ui';
+import { OscillatorScope } from 'react-native-audio-effects/scope';
 
 /**
  * Unison controls are synth settings, not effect parameters, so they have
@@ -44,6 +46,22 @@ const DETUNE_PARAM: ParamDescriptor = {
   max: 60,
   default: 14,
   unit: 'cents',
+  taper: 'linear',
+};
+
+/**
+ * Level for a noise generator.
+ *
+ * Noise cannot be played from the keyboard, so gain doubles as its on
+ * switch: at zero it is silent, and there is no note to gate.
+ */
+const GAIN_PARAM: ParamDescriptor = {
+  key: 'noiseGain',
+  label: 'Gain',
+  min: 0,
+  max: 1,
+  default: 0,
+  unit: '%',
   taper: 'linear',
 };
 
@@ -88,6 +106,8 @@ export function GeneratorsScreen() {
   const [waveform, setWaveform] = useState<Waveform>('sawtooth');
   const [mode, setMode] = useState<PlayMode>('poly');
   const [unison, setUnison] = useState(1);
+  // Starts silent so switching to a noise waveform does not blast.
+  const [noiseGain, setNoiseGain] = useState(0);
   const [detuneCents, setDetuneCents] = useState<number>(DETUNE_PARAM.default);
   const [width, setWidth] = useState<number>(WIDTH_PARAM.default);
   const [synth, setSynth] = useState<PolySynth>();
@@ -198,6 +218,19 @@ export function GeneratorsScreen() {
     [synth]
   );
 
+  // Noise runs continuously, so the knob writes straight to the level.
+  useEffect(() => {
+    if (!synth || isPitched) {
+      return;
+    }
+    synth.setAmplitude(noiseGain);
+    if (noiseGain > 0) {
+      synth.noteOn(60);
+    } else {
+      synth.allNotesOff();
+    }
+  }, [synth, isPitched, noiseGain]);
+
   const setEnvelopeParam = useCallback(
     (key: string, value: number) => {
       setEnvelope((previous) => ({ ...previous, [key]: value }));
@@ -239,100 +272,137 @@ export function GeneratorsScreen() {
         <Text style={styles.description}>{descriptor.description}</Text>
       ) : null}
 
-      <Text style={styles.subheading}>Mode</Text>
-      <View style={styles.chips}>
-        {MODES.map((entry) => (
-          <Pressable
-            key={entry.key}
-            onPress={() => setMode(entry.key)}
-            style={[styles.chip, mode === entry.key && styles.chipActive]}
-          >
-            <Text
-              style={[
-                styles.chipText,
-                mode === entry.key && styles.chipTextActive,
-              ]}
-            >
-              {entry.label}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-      <Text style={styles.hintLine}>
-        {MODES.find((entry) => entry.key === mode)?.hint}
-      </Text>
-
-      <Text style={styles.subheading}>Unison</Text>
-      <View style={styles.chips}>
-        {[1, 2, 3, 5].map((count) => (
-          <Pressable
-            key={count}
-            onPress={() => setUnison(count)}
-            style={[styles.chip, unison === count && styles.chipActive]}
-          >
-            <Text
-              style={[
-                styles.chipText,
-                unison === count && styles.chipTextActive,
-              ]}
-            >
-              {count === 1 ? 'Off' : `${count}x`}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-
-      {unison > 1 ? (
+      {isPitched ? (
         <>
+          <Text style={styles.subheading}>Mode</Text>
+          <View style={styles.chips}>
+            {MODES.map((entry) => (
+              <Pressable
+                key={entry.key}
+                onPress={() => setMode(entry.key)}
+                style={[styles.chip, mode === entry.key && styles.chipActive]}
+              >
+                <Text
+                  style={[
+                    styles.chipText,
+                    mode === entry.key && styles.chipTextActive,
+                  ]}
+                >
+                  {entry.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
           <Text style={styles.hintLine}>
-            Detune spreads the stack in pitch; width spreads it across the
-            stereo field. Detune alone just beats in the middle — the two
-            together are what make a stack sound large.
+            {MODES.find((entry) => entry.key === mode)?.hint}
+          </Text>
+
+          <Text style={styles.subheading}>Unison</Text>
+          <View style={styles.chips}>
+            {[1, 2, 3, 5].map((count) => (
+              <Pressable
+                key={count}
+                onPress={() => setUnison(count)}
+                style={[styles.chip, unison === count && styles.chipActive]}
+              >
+                <Text
+                  style={[
+                    styles.chipText,
+                    unison === count && styles.chipTextActive,
+                  ]}
+                >
+                  {count === 1 ? 'Off' : `${count}x`}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          {unison > 1 ? (
+            <>
+              <Text style={styles.hintLine}>
+                Detune spreads the stack in pitch; width spreads it across the
+                stereo field. Detune alone just beats in the middle — the two
+                together are what make a stack sound large.
+              </Text>
+              <View style={styles.adsrRow}>
+                <Knob
+                  param={DETUNE_PARAM}
+                  value={detuneCents}
+                  onChange={(value) => {
+                    setDetuneCents(value);
+                    synth?.setUnisonSpread(value);
+                  }}
+                  size={60}
+                />
+                <Knob
+                  param={WIDTH_PARAM}
+                  value={width}
+                  onChange={(value) => {
+                    setWidth(value);
+                    synth?.setUnisonPan(value);
+                  }}
+                  size={60}
+                />
+              </View>
+            </>
+          ) : null}
+
+          <Text style={styles.subheading}>Modulation</Text>
+          <View style={styles.panel}>
+            <LFOPanel
+              // Remounting on a rebuild drops an assignment that now points at
+              // effects which no longer exist.
+              key={`${waveform}:${mode}:${unison}`}
+              lfo={lfo}
+              targets={effects}
+              theme={darkTheme}
+            />
+          </View>
+
+          <Text style={styles.subheading}>Envelope</Text>
+          <Text style={styles.hintLine}>
+            Drag the handles. Pull Sustain to the floor and shorten Decay for a
+            pluck — time-based effects like delay and reverb only read clearly
+            on a patch that actually stops.
+          </Text>
+          <EnvelopeEditor
+            values={envelope}
+            onChange={setEnvelopeParam}
+            theme={darkTheme}
+          />
+        </>
+      ) : (
+        <>
+          <Text style={styles.subheading}>Level</Text>
+          <Text style={styles.hintLine}>
+            Noise has no pitch, so there is nothing to play notes with. It runs
+            continuously and the gain is the on switch — turn it down to silence
+            it. Effects still apply, and are most of the point: band-pass plus a
+            short decay is a snare, a slow sweep is wind.
           </Text>
           <View style={styles.adsrRow}>
             <Knob
-              param={DETUNE_PARAM}
-              value={detuneCents}
-              onChange={(value) => {
-                setDetuneCents(value);
-                synth?.setUnisonSpread(value);
-              }}
-              size={60}
-            />
-            <Knob
-              param={WIDTH_PARAM}
-              value={width}
-              onChange={(value) => {
-                setWidth(value);
-                synth?.setUnisonPan(value);
-              }}
-              size={60}
+              param={GAIN_PARAM}
+              value={noiseGain}
+              onChange={setNoiseGain}
+              size={72}
             />
           </View>
         </>
-      ) : null}
+      )}
 
-      <Text style={styles.subheading}>Modulation</Text>
-      <View style={styles.panel}>
-        <LFOPanel
-          // Remounting on a rebuild drops an assignment that now points at
-          // effects which no longer exist.
-          key={`${waveform}:${mode}:${unison}`}
-          lfo={lfo}
-          targets={effects}
-          theme={darkTheme}
-        />
-      </View>
-
-      <Text style={styles.subheading}>Envelope</Text>
-      <Text style={styles.hintLine}>
-        Drag the handles. Pull Sustain to the floor and shorten Decay for a
-        pluck — time-based effects like delay and reverb only read clearly
-        on a patch that actually stops.
-      </Text>
-      <EnvelopeEditor
-        values={envelope}
-        onChange={setEnvelopeParam}
+      <Text style={styles.subheading}>Wave</Text>
+      <OscillatorScope
+        waveform={waveform}
+        // Every held note, so a chord draws as one summed wave.
+        frequencies={activeNotes.map(midiToFrequency)}
+        // Noise has no notes to hold, so its gain is what "sounding"
+        // means. Without this the trace sat flat however loud it was.
+        active={isPitched ? activeNotes.length > 0 : noiseGain > 0}
+        // Noise has no pitch to watch, so height is the only feedback
+        // the gain knob can give. A pitched note shows its level by
+        // moving instead, and stays full height.
+        amplitude={isPitched ? 1 : noiseGain}
         theme={darkTheme}
       />
 

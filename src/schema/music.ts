@@ -10,6 +10,20 @@
 const A4_MIDI = 69;
 const A4_HZ = 440;
 
+/** Semitones in an octave, which is also the root taken in equal temperament. */
+export const SEMITONES_PER_OCTAVE = 12;
+
+/**
+ * The 88 keys of a piano, A0 to C8.
+ *
+ * Exported because this is the range anything pitched is laid out
+ * against — the keyboard draws it, and the scope spreads its scroll
+ * speed across it. Two copies of these numbers would be two things to
+ * keep in step.
+ */
+export const PIANO_LOWEST = 21;
+export const PIANO_HIGHEST = 108;
+
 const SHARP_NAMES = [
   'C',
   'C#',

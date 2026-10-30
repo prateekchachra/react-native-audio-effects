@@ -15,11 +15,26 @@ Load a sound, build an effect chain, and tweak it while it plays — with
 controls that are generated from the same parameter definitions the DSP reads,
 so a knob can never disagree with the effect behind it.
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/prateekchachra/react-native-audio-effects/main/assets/scope-chord-1.png" alt="The oscilloscope drawing a B3 D4 F4 chord on a sawtooth" width="300">
+  <img src="https://raw.githubusercontent.com/prateekchachra/react-native-audio-effects/main/assets/scope-chord-2.png" alt="The same chord a moment later, the trace having scrolled" width="300">
+</p>
+
+<p align="center">
+  <em>One chord — B3, D4, F4 on a saw — three seconds apart. The three notes
+  are summed the way air sums them, so the trace is a composite rather than a
+  repeating ramp, and it scrolls faster the higher you play.</em>
+</p>
+
 - **17 effects** — delay, reverb, chorus, flanger, phaser, tremolo,
   compressor, limiter, noise gate, 4-band parametric EQ, low/high/band-pass
   filters, gain, pan, distortion, bit crusher.
 - **7 generators** — sine, square, saw, triangle, and white/pink/brown noise,
   each with an ADSR envelope and a playable keyboard.
+- **A live oscilloscope** — a Skia-drawn trace of the shape an oscillator is
+  making, summing a chord into one composite wave and reading pitch as both
+  density and speed. Optional: it lives behind its own entry point, so apps
+  that do not want it never install Skia.
 - **A control kit** — rotary knobs, taper-aware sliders, XY pads, level
   meters, a waveform view with scrub-to-seek, a MIDI keyboard, A/B preset
   compare, and an effect rack that builds itself from the schema.

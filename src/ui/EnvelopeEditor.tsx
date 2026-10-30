@@ -190,11 +190,7 @@ export function EnvelopeEditor({
    * the key, the stage's pixel width and the axis — so a re-render
    * mid-drag cannot feed it a stale starting point.
    */
-  const gestureFor = (
-    key: EnvelopeKey,
-    segmentPx: number,
-    axis: 'x' | 'y'
-  ) =>
+  const gestureFor = (key: EnvelopeKey, segmentPx: number, axis: 'x' | 'y') =>
     Gesture.Pan()
       .onBegin(() => {
         'worklet';
@@ -220,7 +216,14 @@ export function EnvelopeEditor({
     axis: 'x' | 'y';
     filled: boolean;
   }> = [
-    { key: 'attack', x: xA, y: top, segment: wAttack, axis: 'x', filled: false },
+    {
+      key: 'attack',
+      x: xA,
+      y: top,
+      segment: wAttack,
+      axis: 'x',
+      filled: false,
+    },
     {
       key: 'decay',
       x: xD,

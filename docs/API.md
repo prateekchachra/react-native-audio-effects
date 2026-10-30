@@ -400,6 +400,39 @@ to JS even though all four hand-written layers are correct. It fails as
 `src/__tests__/bridge-parity.test.ts` covers layers 1–4. If it passes and the
 call still fails at runtime, you are looking at step 5.
 
+## Visualisers (`react-native-audio-effects/scope`)
+
+```tsx
+import { OscillatorScope } from 'react-native-audio-effects/scope';
+
+<OscillatorScope waveform="sawtooth" frequency={440} active={isPlaying} />
+```
+
+Draws the shape the oscillator is making, scrolling, with a neon glow. A
+saw looks like a saw. Pitch is visible too: the higher the note, the more
+cycles fit across the view.
+
+It draws the oscillator's **own** waveform, computed from the type and
+frequency. For a generator that is the truth, since the DSP synthesises
+exactly that shape. It is **not** a scope on the engine's output — adding
+distortion will not change the picture, because samples never leave the
+audio thread. A real scope needs a tap streaming frames to JS, which this
+library does not expose and which has a poor history here: taps on a live
+AVAudioEngine graph have silenced playback more than once.
+
+### Why this is a separate entry point
+
+It needs `@shopify/react-native-skia`, which is an **optional peer
+dependency**. The rest of the UI kit draws with `react-native-svg`, right
+for controls that redraw when a value changes. This redraws every frame,
+several hundred points at a time, which is the case a canvas handles and
+SVG does not. Keeping it behind its own subpath means apps that only want
+knobs never import Skia and never have to install it.
+
+```sh
+yarn add @shopify/react-native-skia   # only if you want the scope
+```
+
 ## Errors
 
 `AudioEffectsError` with a typed `code`, plus `AudioFileError` and

@@ -21,7 +21,13 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { isBlackKey, noteName, octaveStart } from '../schema';
+import {
+  isBlackKey,
+  noteName,
+  octaveStart,
+  PIANO_HIGHEST,
+  PIANO_LOWEST,
+} from '../schema';
 import { useAudioTheme, type AudioTheme } from './theme';
 
 /** Black keys are near-black regardless of theme, as on a real instrument. */
@@ -64,8 +70,6 @@ export interface KeyboardProps {
 }
 
 /** A0 and C8: the bottom and top of a standard 88-key piano. */
-const PIANO_LOWEST = 21;
-const PIANO_HIGHEST = 108;
 
 export function Keyboard({
   startOctave = 3,

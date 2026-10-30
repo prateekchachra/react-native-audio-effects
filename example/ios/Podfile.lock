@@ -1,5 +1,5 @@
 PODS:
-  - AudioEffects (2.0.0):
+  - AudioEffects (2.1.0):
     - hermes-engine
     - RCTRequired
     - RCTTypeSafety
@@ -1395,6 +1395,31 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - react-native-skia (2.14.0):
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React
+    - React-bridging
+    - React-callinvoker
+    - React-Core
+    - React-Core-prebuilt
+    - React-cxxstableapi
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - Yoga
   - React-NativeModulesApple (0.88.0):
     - hermes-engine
     - React-bridging
@@ -2092,6 +2117,7 @@ DEPENDENCIES:
   - React-microtasksnativemodule (from `../node_modules/react-native/ReactCommon/react/nativemodule/microtasks`)
   - React-mutationobservernativemodule (from `../node_modules/react-native/ReactCommon/react/nativemodule/mutationobserver`)
   - "react-native-document-picker (from `../node_modules/@react-native-documents/picker`)"
+  - "react-native-skia (from `../node_modules/@shopify/react-native-skia`)"
   - React-NativeModulesApple (from `../node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios`)
   - React-networking (from `../node_modules/react-native/ReactCommon/react/networking`)
   - React-oscompat (from `../node_modules/react-native/ReactCommon/oscompat`)
@@ -2236,6 +2262,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon/react/nativemodule/mutationobserver"
   react-native-document-picker:
     :path: "../node_modules/@react-native-documents/picker"
+  react-native-skia:
+    :path: "../node_modules/@shopify/react-native-skia"
   React-NativeModulesApple:
     :path: "../node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios"
   React-networking:
@@ -2324,7 +2352,7 @@ EXTERNAL SOURCES:
     :path: build/rncore-facades/Yoga
 
 SPEC CHECKSUMS:
-  AudioEffects: c51fabc161b87491418e996751763c99787ff98e
+  AudioEffects: b627208234dadcc744c41d141df051919068194b
   boost: 8502bfdc46e2804408af2e163049ece181009af4
   DoubleConversion: 501a575c40c0b50c89685762dd3e415e6bb26fb0
   fast_float: 7c925d1cebf8328d4018d061f49377e9f887e3b4
@@ -2373,6 +2401,7 @@ SPEC CHECKSUMS:
   React-microtasksnativemodule: 3c7c5f3624403317fe91b4ddefa86b60023552a8
   React-mutationobservernativemodule: 7284a91b3c7d7fb85b5d4ac04f7f8da811b22977
   react-native-document-picker: 0e19e3476259c7db349c80cdf3a58cc87ed20d65
+  react-native-skia: b9d6b324ab6b97c66a00d9b3ab26fade8bf72132
   React-NativeModulesApple: 52f3def085f129de1307e3eb78e26729ff70f421
   React-networking: e97a095de90a95bf811b887e2dfdb225f20fd493
   React-oscompat: 6865eead03a4aeba8d15b74cf168c7db3377cb63
@@ -2419,4 +2448,4 @@ SPEC CHECKSUMS:
 
 PODFILE CHECKSUM: 22856c7b1f098124a327c020deabf78c89ba072a
 
-COCOAPODS: 1.17.0
+COCOAPODS: 1.15.2

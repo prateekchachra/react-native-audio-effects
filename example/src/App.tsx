@@ -12,9 +12,12 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useAudioEngine } from 'react-native-audio-effects';
 import { ThemeProvider, darkTheme } from 'react-native-audio-effects/ui';
 
+import { MidiDevicePanel } from './MidiDevicePanel';
+import { MidiDrawer, MidiDrawerButton } from './MidiDrawer';
 import { GeneratorsScreen } from './screens/GeneratorsScreen';
 import { SampleAgentScreen } from './screens/SampleAgentScreen';
 import { StudioScreen } from './screens/StudioScreen';
+import { useMidiNotes } from './useMidiNotes';
 
 const TABS = [
   { key: 'studio', label: 'Studio' },
@@ -26,9 +29,14 @@ type TabKey = (typeof TABS)[number]['key'];
 
 export default function App() {
   const [tab, setTab] = useState<TabKey>('studio');
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [connectedCount, setConnectedCount] = useState(0);
   // Mounted once at the root: the engine owns the audio device, so starting
   // it per screen would fight over the session.
   const { isReady, error } = useAudioEngine();
+  // Watched at the root so the drawer can show incoming notes whichever
+  // screen is in front.
+  const lastNote = useMidiNotes();
 
   return (
     <GestureHandlerRootView style={styles.root}>
@@ -47,6 +55,10 @@ export default function App() {
             </View>
           ) : (
             <>
+              <MidiDrawerButton
+                onPress={() => setDrawerOpen(true)}
+                connectedCount={connectedCount}
+              />
               <View style={styles.body}>
                 {tab === 'studio' ? (
                   <StudioScreen />
@@ -78,6 +90,19 @@ export default function App() {
               </View>
             </>
           )}
+
+          {/*
+            Outside the loading branch so the drawer is reachable even if
+            the engine failed — a MIDI device that is not showing up is
+            exactly when you want to look at this list.
+          */}
+          <MidiDrawer open={drawerOpen} onOpenChange={setDrawerOpen}>
+            <MidiDevicePanel
+              onClose={() => setDrawerOpen(false)}
+              lastNote={lastNote}
+              onConnectedCountChange={setConnectedCount}
+            />
+          </MidiDrawer>
         </SafeAreaView>
       </ThemeProvider>
     </GestureHandlerRootView>

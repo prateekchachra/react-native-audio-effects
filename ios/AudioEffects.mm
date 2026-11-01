@@ -34,6 +34,15 @@ static NSString *RNAECodeForError(NSError *error)
     _impl.onLevels = ^(NSDictionary *payload) { [weakSelf emitOnLevels:payload]; };
     _impl.onProgress = ^(NSDictionary *payload) { [weakSelf emitOnProgress:payload]; };
     _impl.onError = ^(NSDictionary *payload) { [weakSelf emitOnError:payload]; };
+
+    // MIDI arrives whenever the player touches the controller, so it is an
+    // event stream for the same reason levels are.
+    _impl.onMidiData = ^(NSDictionary *payload) {
+      [weakSelf emitOnMidiData:payload];
+    };
+    _impl.onMidiDevicesChanged = ^(NSDictionary *payload) {
+      [weakSelf emitOnMidiDevicesChanged:payload];
+    };
   }
   return self;
 }
@@ -268,6 +277,44 @@ static void (^RNAEValueCompletion(RCTPromiseResolveBlock resolve,
 - (void)setMeteringEnabled:(BOOL)enabled intervalMs:(double)intervalMs
 {
   [_impl setMeteringEnabled:enabled intervalMs:intervalMs];
+}
+
+#pragma mark - MIDI
+
+- (void)setMidiEnabled:(BOOL)enabled
+               resolve:(RCTPromiseResolveBlock)resolve
+                reject:(RCTPromiseRejectBlock)reject
+{
+  [_impl setMidiEnabled:enabled completion:RNAEVoidCompletion(resolve, reject)];
+}
+
+- (void)listMidiDevices:(RCTPromiseResolveBlock)resolve
+                 reject:(RCTPromiseRejectBlock)reject
+{
+  [_impl listMidiDevicesWithCompletion:RNAEValueCompletion(resolve, reject)];
+}
+
+- (void)connectMidiDevice:(NSString *)deviceId
+                  resolve:(RCTPromiseResolveBlock)resolve
+                   reject:(RCTPromiseRejectBlock)reject
+{
+  [_impl connectMidiDevice:deviceId
+                completion:RNAEVoidCompletion(resolve, reject)];
+}
+
+- (void)disconnectMidiDevice:(NSString *)deviceId
+                     resolve:(RCTPromiseResolveBlock)resolve
+                      reject:(RCTPromiseRejectBlock)reject
+{
+  [_impl disconnectMidiDevice:deviceId
+                   completion:RNAEVoidCompletion(resolve, reject)];
+}
+
+- (void)presentBluetoothMidiPairing:(RCTPromiseResolveBlock)resolve
+                             reject:(RCTPromiseRejectBlock)reject
+{
+  [_impl presentBluetoothMidiPairingWithCompletion:RNAEVoidCompletion(resolve,
+                                                                      reject)];
 }
 
 #pragma mark - TurboModule

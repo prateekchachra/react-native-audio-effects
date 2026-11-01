@@ -96,6 +96,38 @@ export type ProgressEvent = {
   isPlaying: boolean;
 };
 
+/** A MIDI input the system can see. */
+export type MidiDeviceInfo = {
+  /** Stable for as long as the device stays attached. */
+  id: string;
+  name: string;
+  manufacturer: string;
+  /** `'usb'`, `'bluetooth'`, `'network'`, `'virtual'` or `'unknown'`. */
+  transport: string;
+  /** Whether this library currently has the device open. */
+  isConnected: boolean;
+};
+
+/**
+ * Raw bytes from a MIDI device.
+ *
+ * Undecoded on purpose. One chunk is whatever the transport delivered
+ * together — possibly several messages, possibly half of one — and
+ * `src/midi` reassembles them. Decoding natively would mean writing that
+ * reassembly twice, once per platform.
+ */
+export type MidiDataEvent = {
+  deviceId: string;
+  data: number[];
+  /** Host time in milliseconds, for ordering and jitter measurement. */
+  timestamp: number;
+};
+
+/** Emitted when a device is attached, removed, or changes name. */
+export type MidiDevicesChangedEvent = {
+  deviceCount: number;
+};
+
 /** An error that happened on the audio thread, outside any pending promise. */
 export type AudioErrorEvent = {
   /** Stable machine-readable code, e.g. `'STREAM_ERROR'`, `'UNDERRUN'`. */
@@ -227,9 +259,45 @@ export interface Spec extends TurboModule {
    */
   setMeteringEnabled(enabled: boolean, intervalMs: number): void;
 
+  // ------------------------------------------------------------------ midi
+
+  /**
+   * Open or close the MIDI client.
+   *
+   * Nothing is enumerated or delivered until this is on, so an app that
+   * never asks for MIDI pays nothing — and on iOS does not trip the
+   * Bluetooth permission prompt that creating a client can provoke.
+   */
+  setMidiEnabled(enabled: boolean): Promise<void>;
+
+  /**
+   * Every MIDI input the system can currently see.
+   *
+   * USB and network devices appear on their own. Bluetooth devices only
+   * appear once paired, which is what {@link presentBluetoothMidiPairing}
+   * is for.
+   */
+  listMidiDevices(): Promise<MidiDeviceInfo[]>;
+
+  /** Start receiving from a device. Rejects if it has gone away. */
+  connectMidiDevice(deviceId: string): Promise<void>;
+
+  disconnectMidiDevice(deviceId: string): Promise<void>;
+
+  /**
+   * Show the system's Bluetooth MIDI pairing sheet.
+   *
+   * iOS only, and the only way to pair a BLE MIDI device: there is no
+   * Settings pane for them, so every app that wants one presents this
+   * same system view. Rejects with `MIDI_UNSUPPORTED` elsewhere.
+   */
+  presentBluetoothMidiPairing(): Promise<void>;
+
   readonly onLevels: CodegenTypes.EventEmitter<LevelsEvent>;
   readonly onProgress: CodegenTypes.EventEmitter<ProgressEvent>;
   readonly onError: CodegenTypes.EventEmitter<AudioErrorEvent>;
+  readonly onMidiData: CodegenTypes.EventEmitter<MidiDataEvent>;
+  readonly onMidiDevicesChanged: CodegenTypes.EventEmitter<MidiDevicesChangedEvent>;
 }
 
 export default TurboModuleRegistry.getEnforcing<Spec>('AudioEffects');

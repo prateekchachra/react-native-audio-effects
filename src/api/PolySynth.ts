@@ -164,8 +164,34 @@ interface Voice {
   startedAt: number;
 }
 
+/** How a note should be struck. */
+export interface NoteOptions {
+  /**
+   * Loudness of this note alone, 0 to 1, multiplied into the patch level.
+   *
+   * Left at 1 by a touchscreen, which has no way to measure how hard a
+   * key was hit. A MIDI keyboard does, and it is most of what makes
+   * hardware feel different from tapping glass.
+   */
+  velocity?: number;
+  /**
+   * Strike the note again if it is already sounding, rather than
+   * releasing it.
+   *
+   * The on-screen keyboard wants the default: a tap has no release, so
+   * tapping a held key is the only way to let it go. A MIDI keyboard
+   * sends its own note off and wants the opposite — during a fast trill
+   * the previous note off can land *after* the next note on, and
+   * toggling there would silence a key the player is still holding.
+   */
+  retrigger?: boolean;
+}
+
 /** Glide steps per second. Fast enough to sound continuous. */
 const GLIDE_HZ = 60;
+
+/** Equal temperament divides a semitone into a hundred cents. */
+const CENTS_PER_SEMITONE = 100;
 
 export class PolySynth {
   private voices: Voice[] = [];
@@ -176,6 +202,8 @@ export class PolySynth {
   private envelope = envelopeDefaults();
   private stacks: VoiceStackEffect[] = [];
   private disposed = false;
+  /** Current pitch wheel position, in semitones. */
+  private bendSemitones = 0;
 
   readonly options: Required<PolySynthOptions>;
 
@@ -242,17 +270,18 @@ export class PolySynth {
   // ------------------------------------------------------------------ notes
 
   /** Sound a note. */
-  noteOn(midi: number): void {
+  noteOn(midi: number, options: NoteOptions = {}): void {
     if (this.disposed) {
       return;
     }
     const hz = midiToFrequency(midi);
+    const velocity = Math.min(1, Math.max(0, options.velocity ?? 1));
 
     if (this.options.mode === 'poly') {
-      this.playPoly(midi, hz);
+      this.playPoly(midi, hz, velocity, options.retrigger ?? false);
       return;
     }
-    this.playMono(midi, hz);
+    this.playMono(midi, hz, velocity);
   }
 
   /** Release a note. Ignored in the mono modes unless it is the held note. */
@@ -289,12 +318,22 @@ export class PolySynth {
 
   // ------------------------------------------------------------------ modes
 
-  private playPoly(midi: number, hz: number): void {
-    // Re-pressing a sounding note releases it, which is what makes a
-    // touchscreen chord builder work: tap to add, tap again to remove.
+  private playPoly(
+    midi: number,
+    hz: number,
+    velocity: number,
+    retrigger: boolean
+  ): void {
     if (this.voices.some((voice) => voice.midi === midi)) {
+      // Re-pressing a sounding note releases it, which is what makes a
+      // touchscreen chord builder work: tap to add, tap again to remove.
+      if (!retrigger) {
+        this.noteOff(midi);
+        return;
+      }
+      // A controller that asked to retrigger gets the note taken and
+      // struck again, so the envelope restarts from the attack.
       this.noteOff(midi);
-      return;
     }
 
     const needed = this.options.unison;
@@ -311,11 +350,11 @@ export class PolySynth {
       return;
     }
     this.tuneStack(sources, hz);
-    sources.forEach((source) => source.gate(true));
+    this.strike(sources, velocity);
     this.voices.push({ midi, sources, startedAt: this.counter++ });
   }
 
-  private playMono(midi: number, hz: number): void {
+  private playMono(midi: number, hz: number, velocity: number): void {
     const held = this.voices[0];
 
     if (!held) {
@@ -324,7 +363,7 @@ export class PolySynth {
         return;
       }
       this.tuneStack(sources, hz);
-      sources.forEach((source) => source.gate(true));
+      this.strike(sources, velocity);
       this.voices = [{ midi, sources, startedAt: this.counter++ }];
       this.currentHz = hz;
       return;
@@ -342,18 +381,54 @@ export class PolySynth {
     // `mono` re-attacks on every note; `legato` and `portamento` leave the
     // envelope running, which is the whole point of them.
     if (this.options.mode === 'mono') {
-      held.sources.forEach((source) => source.gate(true));
+      this.strike(held.sources, velocity);
     }
   }
 
+  /**
+   * Set a stack's loudness for this note, then open its gate.
+   *
+   * Amplitude is written before the gate rather than after, so the
+   * envelope's attack starts at the right level. Setting it afterwards
+   * steps the level part-way through the attack, which is audible as a
+   * click on a short one.
+   */
+  private strike(sources: Source[], velocity: number): void {
+    const level = this.options.amplitude * velocity;
+    for (const source of sources) {
+      source.setOscillatorParam('amplitude', level);
+    }
+    sources.forEach((source) => source.gate(true));
+  }
+
   // ----------------------------------------------------------------- tuning
+
+  /**
+   * Bend every sounding note, in semitones. Positive is sharp.
+   *
+   * Applied as a detune on top of whatever the unison stack is already
+   * doing, rather than by rewriting each voice's note number, so that
+   * letting the wheel go returns to exactly the original pitch instead
+   * of to a rounded one.
+   */
+  setPitchBend(semitones: number): void {
+    if (this.disposed || this.bendSemitones === semitones) {
+      return;
+    }
+    this.bendSemitones = semitones;
+    this.retuneHeldVoices();
+  }
 
   /** Spread a unison stack around a centre frequency, in pitch and in space. */
   private tuneStack(sources: Source[], hz: number): void {
     const offsets = unisonOffsets(sources.length, this.options.unisonSpread);
     const pans = unisonPans(sources.length, this.options.unisonPan);
+    const bendCents = this.bendSemitones * CENTS_PER_SEMITONE;
     sources.forEach((source, index) => {
-      source.setOscillatorParam('frequency', detune(hz, offsets[index] ?? 0));
+      source.setOscillatorParam(
+        'frequency',
+        detune(hz, (offsets[index] ?? 0) + bendCents)
+      );
       source.setPan(pans[index] ?? 0);
     });
   }
@@ -454,6 +529,10 @@ export class PolySynth {
 
   /** Output level for every voice, 0..1. */
   setAmplitude(amplitude: number): void {
+    // Recorded, not just applied: every note struck after this scales its
+    // velocity against the patch level, so forgetting it here would let
+    // the next key press undo the gain the user just set.
+    this.options.amplitude = amplitude;
     for (const source of this.allSources()) {
       source.setOscillatorParam('amplitude', amplitude);
     }

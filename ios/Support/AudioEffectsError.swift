@@ -20,6 +20,10 @@ enum AudioEffectsError: LocalizedError {
   case decodeFailed(String, underlying: Error?)
   case invalidChainOrder
   case engineFailed(Error)
+  /// The MIDI client could not be created, or a port could not be opened.
+  case midiFailed(String, OSStatus)
+  case midiDeviceNotFound(String)
+  case midiNotEnabled
 
   var code: String {
     switch self {
@@ -34,6 +38,9 @@ enum AudioEffectsError: LocalizedError {
     case .decodeFailed: return "DECODE_FAILED"
     case .invalidChainOrder: return "INVALID_CHAIN_ORDER"
     case .engineFailed: return "ENGINE_FAILED"
+    case .midiFailed: return "MIDI_FAILED"
+    case .midiDeviceNotFound: return "MIDI_DEVICE_NOT_FOUND"
+    case .midiNotEnabled: return "MIDI_NOT_ENABLED"
     }
   }
 
@@ -66,6 +73,14 @@ enum AudioEffectsError: LocalizedError {
         + "source's current chain."
     case let .engineFailed(underlying):
       return "The audio engine failed to start: \(underlying.localizedDescription)"
+    case let .midiFailed(what, status):
+      return "Could not \(what) for MIDI (CoreMIDI status \(status))."
+    case let .midiDeviceNotFound(id):
+      return
+        "No MIDI device with id \(id). It may have been unplugged, or "
+        + "unpaired if it was Bluetooth."
+    case .midiNotEnabled:
+      return "MIDI is not enabled. Call setMidiEnabled(true) first."
     }
   }
 

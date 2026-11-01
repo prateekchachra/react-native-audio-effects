@@ -36,6 +36,24 @@ export type {
 } from './NativeAudioEffects';
 
 export {
+  MidiInput,
+  MidiStream,
+  channelLabel,
+  normalizeBend,
+  normalizeVelocity,
+  MAX_VELOCITY,
+  PITCH_BEND_CENTRE,
+  PITCH_BEND_MAX,
+} from './midi';
+export type {
+  MidiDeviceInfo,
+  MidiListener,
+  MidiMessage,
+  RouteOptions,
+  Unsubscribe,
+} from './midi';
+
+export {
   SampleAgent,
   attributionFor,
   buildSearchParams,

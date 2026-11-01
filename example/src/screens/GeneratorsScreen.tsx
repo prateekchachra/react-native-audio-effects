@@ -11,6 +11,7 @@ import {
   EFFECTS,
   GENERATORS,
   LFO,
+  MidiInput,
   PolySynth,
   PresetStore,
   envelopeDefaults,
@@ -189,6 +190,36 @@ export function GeneratorsScreen() {
     },
     [synth]
   );
+
+  /**
+   * Let a hardware controller play the same synth the on-screen keys do.
+   *
+   * `routeTo` drives the synth directly rather than through `noteOn`
+   * above, so a key press does not wait on a React render. The highlight
+   * is refreshed separately and is allowed to lag — it is the picture,
+   * not the sound.
+   *
+   * Noise generators have no notes, so there is nothing to play.
+   */
+  useEffect(() => {
+    if (!synth || !isPitched) {
+      return;
+    }
+    const stop = MidiInput.routeTo(synth, {
+      // Most controllers make the extremes hard to reach on a straight
+      // line; a gentle curve puts more of the range where fingers live.
+      velocityCurve: (velocity) => Math.pow(velocity, 0.7),
+    });
+    const unwatch = MidiInput.addListener((message) => {
+      if (message.type === 'noteOn' || message.type === 'noteOff') {
+        setActiveNotes(synth.activeNotes);
+      }
+    });
+    return () => {
+      stop();
+      unwatch();
+    };
+  }, [synth, isPitched]);
 
   const addEffect = useCallback(
     async (type: EffectType) => {

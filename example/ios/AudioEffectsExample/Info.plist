@@ -74,5 +74,10 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
+	<!-- Required to pair a Bluetooth MIDI controller. Without it the system
+	     pairing sheet opens and finds nothing, which reads as broken
+	     hardware rather than a missing key. -->
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Connect a Bluetooth MIDI keyboard to play the synth.</string>
 </dict>
 </plist>

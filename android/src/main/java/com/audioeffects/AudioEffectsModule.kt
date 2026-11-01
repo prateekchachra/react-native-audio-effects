@@ -263,7 +263,53 @@ class AudioEffectsModule(reactContext: ReactApplicationContext) :
   override fun setMeteringEnabled(enabled: Boolean, intervalMs: Double) {
     backend.setMeteringEnabled(enabled, intervalMs)
   }
+
+  // ---------------------------------------------------------------- midi
+  //
+  // Not yet implemented here. Android has the pieces — `android.media.midi`
+  // has covered USB and BLE controllers since API 23, well under this
+  // library's floor of 24 — but the iOS side shipped first and this is
+  // being built behind it.
+  //
+  // These are present and rejecting rather than absent on purpose. A
+  // TurboModule method that does not exist is not a missing feature, it is
+  // a crash the moment anything calls it, so an app running the same
+  // JavaScript on both platforms would die here rather than find out that
+  // MIDI is unavailable. `MIDI_UNSUPPORTED` is something a caller can
+  // actually branch on, and `listMidiDevices` answering with an empty list
+  // means a device picker shows "no devices" instead of an error.
+
+  override fun setMidiEnabled(enabled: Boolean, promise: Promise) {
+    if (!enabled) {
+      // Disabling something that was never enabled is not a failure.
+      promise.resolve(null)
+      return
+    }
+    promise.reject("MIDI_UNSUPPORTED", MIDI_UNSUPPORTED_MESSAGE)
+  }
+
+  override fun listMidiDevices(promise: Promise) {
+    promise.resolve(Arguments.createArray())
+  }
+
+  override fun connectMidiDevice(deviceId: String, promise: Promise) {
+    promise.reject("MIDI_UNSUPPORTED", MIDI_UNSUPPORTED_MESSAGE)
+  }
+
+  override fun disconnectMidiDevice(deviceId: String, promise: Promise) {
+    // Nothing can be connected, so there is nothing to fail at.
+    promise.resolve(null)
+  }
+
+  override fun presentBluetoothMidiPairing(promise: Promise) {
+    promise.reject("MIDI_UNSUPPORTED", MIDI_UNSUPPORTED_MESSAGE)
+  }
 }
+
+private const val MIDI_UNSUPPORTED_MESSAGE =
+  "MIDI input is not implemented on Android yet. It is available on iOS; " +
+    "check the platform before enabling it, or getCapabilities() for what " +
+    "this build supports."
 
 // ReadableMap throws rather than returning null for a missing key, so these
 // keep the call sites free of hasKey checks.

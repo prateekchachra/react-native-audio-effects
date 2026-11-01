@@ -10,11 +10,15 @@ import Foundation
 @objc(AudioEffectsImpl)
 public final class AudioEffectsImpl: NSObject {
   private let backend = AudioKitBackend()
+  private let midi = MidiInput()
+  private let bluetoothPairing = BluetoothMidiPairing()
 
   /// Event sinks, wired up by the ObjC++ layer to the generated emitters.
   @objc public var onLevels: ((NSDictionary) -> Void)?
   @objc public var onProgress: ((NSDictionary) -> Void)?
   @objc public var onError: ((NSDictionary) -> Void)?
+  @objc public var onMidiData: ((NSDictionary) -> Void)?
+  @objc public var onMidiDevicesChanged: ((NSDictionary) -> Void)?
 
   @objc public override init() {
     super.init()
@@ -45,6 +49,20 @@ public final class AudioEffectsImpl: NSObject {
         "sourceId": sourceId,
       ])
     }
+
+    // Bytes go up undecoded; see MidiInput for why there is no parser on
+    // this side of the bridge.
+    midi.onData = { [weak self] deviceId, bytes, timestamp in
+      self?.onMidiData?([
+        "deviceId": deviceId,
+        "data": bytes.map { Int($0) },
+        "timestamp": timestamp,
+      ])
+    }
+
+    midi.onDevicesChanged = { [weak self] count in
+      self?.onMidiDevicesChanged?(["deviceCount": count])
+    }
   }
 
   // MARK: - Engine
@@ -73,7 +91,13 @@ public final class AudioEffectsImpl: NSObject {
   }
 
   @objc public func teardown(completion: @escaping (NSError?) -> Void) {
-    run(completion) { self.backend.teardown() }
+    run(completion) {
+      // The MIDI client is a system resource like the audio session: a
+      // reload that left it open would stack up clients, and the device
+      // would still be delivering to a port nothing is listening on.
+      self.midi.stop()
+      self.backend.teardown()
+    }
   }
 
   // MARK: - Sources
@@ -241,6 +265,57 @@ public final class AudioEffectsImpl: NSObject {
 
   @objc public func setMeteringEnabled(_ enabled: Bool, intervalMs: Double) {
     backend.setMeteringEnabled(enabled, intervalMs: intervalMs)
+  }
+
+  // MARK: - MIDI
+
+  @objc public func setMidiEnabled(
+    _ enabled: Bool,
+    completion: @escaping (NSError?) -> Void
+  ) {
+    run(completion) {
+      if enabled {
+        do {
+          try self.midi.start()
+        } catch let error as MidiError {
+          throw error.asAudioEffectsError
+        }
+      } else {
+        self.midi.stop()
+      }
+    }
+  }
+
+  @objc public func listMidiDevices(
+    completion: @escaping (Any?, NSError?) -> Void
+  ) {
+    runValue(completion) { self.midi.devices() }
+  }
+
+  @objc public func connectMidiDevice(
+    _ deviceId: String,
+    completion: @escaping (NSError?) -> Void
+  ) {
+    run(completion) {
+      do {
+        try self.midi.connect(deviceId: deviceId)
+      } catch let error as MidiError {
+        throw error.asAudioEffectsError
+      }
+    }
+  }
+
+  @objc public func disconnectMidiDevice(
+    _ deviceId: String,
+    completion: @escaping (NSError?) -> Void
+  ) {
+    run(completion) { self.midi.disconnect(deviceId: deviceId) }
+  }
+
+  @objc public func presentBluetoothMidiPairing(
+    completion: @escaping (NSError?) -> Void
+  ) {
+    bluetoothPairing.present(completion: completion)
   }
 
   // MARK: - Error plumbing

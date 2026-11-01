@@ -18,6 +18,13 @@ Pod::Spec.new do |s|
 
   s.swift_version = "5.9"
 
+  # CoreMIDI reads from hardware controllers; CoreAudioKit supplies the system
+  # Bluetooth MIDI pairing sheet, which is the only way to pair a wireless
+  # controller on iOS — there is no Settings pane for them. Declared explicitly
+  # rather than left to Swift autolinking, which does not reliably reach a
+  # statically linked pod's dependents.
+  s.frameworks = "CoreMIDI", "CoreAudioKit"
+
   install_modules_dependencies(s)
 
   # AudioKit is Swift Package Manager only.

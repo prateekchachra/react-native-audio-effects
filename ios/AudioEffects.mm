@@ -279,6 +279,17 @@ static void (^RNAEValueCompletion(RCTPromiseResolveBlock resolve,
   [_impl setMeteringEnabled:enabled intervalMs:intervalMs];
 }
 
+- (NSString *)getOutputRoute
+{
+  return [_impl getOutputRoute];
+}
+
+- (void)createMicrophone:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject
+{
+  [_impl createMicrophoneWithCompletion:RNAEValueCompletion(resolve, reject)];
+}
+
 #pragma mark - MIDI
 
 - (void)setMidiEnabled:(BOOL)enabled

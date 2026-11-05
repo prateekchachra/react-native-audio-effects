@@ -172,6 +172,20 @@ export interface Spec extends TurboModule {
     options: OscillatorOptions
   ): Promise<number>;
 
+  /**
+   * Open the microphone as a source.
+   *
+   * Requires `configure({ category: 'playAndRecord' })` first, and raises
+   * the system permission prompt on the first call — so an app that never
+   * records never asks for it.
+   *
+   * The source arrives **muted**, at volume 0. A microphone routed to the
+   * speaker is a feedback loop, so unmuting is a deliberate second call
+   * once headphones are confirmed. Rejects with `MICROPHONE_DENIED` or
+   * `MICROPHONE_UNAVAILABLE`.
+   */
+  createMicrophone(): Promise<number>;
+
   /** Release a source and every effect in its chain. */
   releaseSource(sourceId: number): Promise<void>;
 
@@ -250,6 +264,16 @@ export interface Spec extends TurboModule {
    * the schema, so the parse cost is irrelevant.
    */
   getCapabilitiesJSON(): string;
+
+  /**
+   * The current audio output port, as the platform names it — e.g.
+   * `'Speaker'`, `'Headphones'`, `'BluetoothA2DPOutput'`.
+   *
+   * Synchronous because it is a property read, and because the question
+   * it answers — is it safe to monitor the microphone out loud — has to
+   * be asked again every time the route changes.
+   */
+  getOutputRoute(): string;
 
   // -------------------------------------------------------------- metering
 

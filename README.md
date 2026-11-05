@@ -26,15 +26,21 @@ so a knob can never disagree with the effect behind it.
   repeating ramp, and it scrolls faster the higher you play.</em>
 </p>
 
-- **17 effects** — delay, reverb, chorus, flanger, phaser, tremolo,
+- **22 effects** — delay, reverb, chorus, flanger, phaser, tremolo,
   compressor, limiter, noise gate, 4-band parametric EQ, low/high/band-pass
-  filters, gain, pan, distortion, bit crusher.
+  filters, gain, pan, distortion, bit crusher, and five for voices — pitch
+  correction, vocoder, talk box, formant filter and pitch shift.
 - **7 generators** — sine, square, saw, triangle, and white/pink/brown noise,
   each with an ADSR envelope and a playable keyboard.
 - **A live oscilloscope** — a Skia-drawn trace of the shape an oscillator is
   making, summing a chord into one composite wave and reading pitch as both
   density and speed. Optional: it lives behind its own entry point, so apps
   that do not want it never install Skia.
+- **Live input** — process the microphone in real time: pitch correction to
+  a key, a vocoder and talk box whose carrier you can play from a MIDI
+  keyboard, formant shaping and pitch shift. iOS only for now.
+- **MIDI controllers** — USB-C, Bluetooth and network, decoded in one place
+  and routed to a synth in a single call. iOS only for now.
 - **A control kit** — rotary knobs, taper-aware sliders, XY pads, level
   meters, a waveform view with scrub-to-seek, a MIDI keyboard, A/B preset
   compare, and an effect rack that builds itself from the schema.

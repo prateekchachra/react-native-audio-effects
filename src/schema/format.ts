@@ -19,6 +19,9 @@ const DEFAULT_PRECISION: Record<ParamUnit, number> = {
   ':1': 1,
   'oct': 2,
   'cents': 0,
+  // Semitones read as whole steps on a transpose knob; a shift of 7.25
+  // is not a thing anyone asks for.
+  'st': 0,
   'bit': 0,
   '': 2,
 };
@@ -76,6 +79,13 @@ export function formatValue(param: ParamDescriptor, value: number): string {
       const sign = value > 0 ? '+' : '';
       return `${sign}${round(value, precision)} ct`;
     }
+    case 'st': {
+      // Signed for the same reason cents are: a transposition of -5 and
+      // one of +5 are opposite moves, and an unsigned readout hides it.
+      const sign = value > 0 ? '+' : '';
+      return `${sign}${round(value, precision)} st`;
+    }
+
     case 'oct':
       return `${round(value, precision)} oct`;
 

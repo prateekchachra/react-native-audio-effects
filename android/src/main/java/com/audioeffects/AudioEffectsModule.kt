@@ -264,6 +264,23 @@ class AudioEffectsModule(reactContext: ReactApplicationContext) :
     backend.setMeteringEnabled(enabled, intervalMs)
   }
 
+  override fun getOutputRoute(): String {
+    // Android has no live input here yet, so nothing consults this for a
+    // feedback decision. Honest rather than guessed: the caller treats an
+    // unknown route as unsafe to monitor, which is the right default.
+    return "Unknown"
+  }
+
+  override fun createMicrophone(promise: Promise) {
+    // Present and rejecting for the same reason the MIDI methods are: an
+    // absent TurboModule method is a crash, not a missing feature.
+    promise.reject(
+      "MICROPHONE_UNAVAILABLE",
+      "Live microphone input is not implemented on Android yet. It is " +
+        "available on iOS.",
+    )
+  }
+
   // ---------------------------------------------------------------- midi
   //
   // Not yet implemented here. Android has the pieces — `android.media.midi`

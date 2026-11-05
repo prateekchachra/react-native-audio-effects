@@ -171,6 +171,63 @@ final class AudioKitBackend {
     }
   }
 
+  /**
+   Open the microphone as a source.
+
+   Requires the engine to have been configured with the `playAndRecord`
+   category — `AudioEngine.input` is nil otherwise, and the failure is
+   reported rather than silently producing a source that stays quiet
+   forever.
+
+   The source arrives muted. Microphone into speaker is a feedback loop,
+   and a feature that screams the instant it is switched on is worse than
+   one that needs a second call; the caller unmutes once headphones are
+   confirmed. See `setSourceVolume`.
+   */
+  func createMicrophone() throws -> Int {
+    try queue.sync {
+      // The engine stops *before* `engine.input` is read, not after.
+      //
+      // That ordering is the whole thing. AudioKit's InputNode connects
+      // `avEngine.inputNode` the first time the property is accessed, and
+      // AVAudioEngine will not take an input connection on a running
+      // graph: it accepts the call, reports nothing, and then sits in
+      // "reconfig pending" until the I/O cycle gives up — which from
+      // JavaScript is a promise that never settles. Reading the property
+      // is therefore already the forbidden operation, so stopping
+      // afterwards is too late.
+      let wasRunning = engine.avEngine.isRunning
+      if wasRunning {
+        engine.stop()
+      }
+
+      guard let input = engine.input else {
+        if wasRunning {
+          try? engine.start()
+        }
+        throw AudioEffectsError.microphoneUnavailable
+      }
+
+      let id = nextId
+      nextId += 1
+      let graph = SourceGraph(id: id, input: input, engine: engine)
+      sources[id] = graph
+      rootMixer.addInput(graph.meter)
+
+      // Other sources keep their chains across the bounce; they are
+      // reconnected on the way back up.
+      engine.rebuildGraph()
+      if wasRunning {
+        do {
+          try engine.start()
+        } catch {
+          throw AudioEffectsError.engineFailed(error)
+        }
+      }
+      return id
+    }
+  }
+
   func releaseSource(_ sourceId: Int) throws {
     try queue.sync {
       guard let graph = sources.removeValue(forKey: sourceId) else {

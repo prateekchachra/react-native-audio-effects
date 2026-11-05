@@ -142,6 +142,37 @@ class AudioEngineImpl {
     );
   }
 
+  /**
+   * Open the microphone as a live source.
+   *
+   * Raises the system permission prompt the first time, so an app that
+   * never records never asks. The engine must have been configured with
+   * `category: 'playAndRecord'`; it rejects rather than handing back a
+   * source that would stay silent forever.
+   *
+   * ## It comes back muted
+   *
+   * At volume 0, deliberately. A microphone routed to the speaker is a
+   * feedback loop, and the howl is instant and loud. Call
+   * `source.setVolume()` once you know the output is headphones — see
+   * {@link isUsingHeadphones}, which is the check this is waiting for.
+   *
+   * ```ts
+   * const mic = await engine.createMicrophone();
+   * await mic.addEffect('pitchCorrect');
+   * if (await isUsingHeadphones()) mic.setVolume(1);
+   * ```
+   */
+  async createMicrophone(): Promise<Source> {
+    const sourceId = await NativeAudioEffects.createMicrophone();
+    return new Source(sourceId, 'microphone', {
+      durationSec: 0,
+      sampleRate: 0,
+      channelCount: 1,
+      peaks: [],
+    });
+  }
+
   // -------------------------------------------------------------- metering
 
   /**

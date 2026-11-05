@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 
 /**
@@ -265,6 +266,45 @@ public final class AudioEffectsImpl: NSObject {
 
   @objc public func setMeteringEnabled(_ enabled: Bool, intervalMs: Double) {
     backend.setMeteringEnabled(enabled, intervalMs: intervalMs)
+  }
+
+  /// The current output port type, for the feedback check in `monitoring.ts`.
+  @objc public func getOutputRoute() -> String {
+    AVAudioSession.sharedInstance().currentRoute.outputs.first?
+      .portType.rawValue ?? "Unknown"
+  }
+
+  // MARK: - Microphone
+
+  /**
+   Ask for the microphone, then open it as a source.
+
+   The permission prompt is raised here rather than at configure time, so
+   an app that never records never asks. iOS 17 moved the API onto
+   `AVAudioApplication`; the older one still works but is deprecated, so
+   both paths are kept.
+   */
+  @objc public func createMicrophone(
+    completion: @escaping (Any?, NSError?) -> Void
+  ) {
+    Self.requestRecordPermission { [weak self] granted in
+      guard let self else { return }
+      guard granted else {
+        completion(nil, AudioEffectsError.microphoneDenied.asNSError)
+        return
+      }
+      self.runValue(completion) { try self.backend.createMicrophone() }
+    }
+  }
+
+  private static func requestRecordPermission(
+    _ completion: @escaping (Bool) -> Void
+  ) {
+    if #available(iOS 17.0, *) {
+      AVAudioApplication.requestRecordPermission(completionHandler: completion)
+    } else {
+      AVAudioSession.sharedInstance().requestRecordPermission(completion)
+    }
   }
 
   // MARK: - MIDI

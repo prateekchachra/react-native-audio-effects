@@ -17,11 +17,13 @@ import { MidiDrawer, MidiDrawerButton } from './MidiDrawer';
 import { GeneratorsScreen } from './screens/GeneratorsScreen';
 import { SampleAgentScreen } from './screens/SampleAgentScreen';
 import { StudioScreen } from './screens/StudioScreen';
+import { VoiceScreen } from './screens/VoiceScreen';
 import { useMidiNotes } from './useMidiNotes';
 
 const TABS = [
   { key: 'studio', label: 'Studio' },
   { key: 'generators', label: 'Generators' },
+  { key: 'voice', label: 'Voice' },
   { key: 'agent', label: 'Samples' },
 ] as const;
 
@@ -64,6 +66,8 @@ export default function App() {
                   <StudioScreen />
                 ) : tab === 'generators' ? (
                   <GeneratorsScreen />
+                ) : tab === 'voice' ? (
+                  <VoiceScreen />
                 ) : (
                   <SampleAgentScreen />
                 )}

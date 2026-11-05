@@ -19,7 +19,7 @@ import { join } from 'path';
 
 import { describe, expect, it } from '@jest/globals';
 
-import { EFFECTS, EQ_BAND_COUNT, GENERATORS } from '../schema';
+import { EFFECTS, EQ_BAND_COUNT, GENERATORS, KEY_NAMES } from '../schema';
 import { isParamSupported } from '../schema';
 
 const IOS_EFFECTS_DIR = join(__dirname, '..', '..', 'ios', 'Effects');
@@ -287,5 +287,42 @@ describe('native generators match the schema', () => {
     }
     const native = [...match[1]!.matchAll(/"([^"]+)"/g)].map((m) => m[1]!);
     expect(native.sort()).toEqual(expected);
+  });
+});
+
+describe('pitch correction keys', () => {
+  // KEY_NAMES and PitchCorrectEffect.pitchClasses are the same list in two
+  // languages, indexed by the same number coming over the wire. If they
+  // drift, a singer picks E flat and the DSP tunes them to E.
+  it('matches the Swift key table, in order', () => {
+    const swift = readFileSync(
+      join(__dirname, '../../ios/Effects/VoiceEffects.swift'),
+      'utf8'
+    );
+    const table = swift.match(
+      /pitchClasses:\s*\[Key\]\s*=\s*\[([\s\S]*?)\]/
+    )?.[1];
+    expect(table).toBeDefined();
+
+    const swiftKeys = [...table!.matchAll(/\.([A-G][a-z]?)/g)].map((m) => m[1]);
+    const expected = KEY_NAMES.map((name) =>
+      name.replace('♯', 's').replace('♭', 'b')
+    );
+
+    expect(swiftKeys).toEqual(expected);
+  });
+
+  it('offers a key for every pitch class', () => {
+    expect(KEY_NAMES).toHaveLength(12);
+  });
+
+  it('spells the awkward ones as real keys', () => {
+    // D sharp, G sharp and A sharp major need double sharps to write, so
+    // the practical keys at those pitches are flats. Tonic only has the
+    // practical set, which is what broke the first build here.
+    expect(KEY_NAMES).toContain('E♭');
+    expect(KEY_NAMES).toContain('A♭');
+    expect(KEY_NAMES).toContain('B♭');
+    expect(KEY_NAMES).not.toContain('D♯');
   });
 });

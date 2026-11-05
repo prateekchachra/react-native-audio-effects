@@ -30,6 +30,17 @@ enum EffectFactory {
     (BandPassEffect.type, BandPassEffect.supportedKeys, { BandPassEffect(input: $0) }),
     (DistortionEffect.type, DistortionEffect.supportedKeys, { DistortionEffect(input: $0) }),
     (BitCrusherEffect.type, BitCrusherEffect.supportedKeys, { BitCrusherEffect(input: $0) }),
+    (PitchShiftEffect.type, PitchShiftEffect.supportedKeys, { PitchShiftEffect(input: $0) }),
+    (
+      PitchCorrectEffect.type, PitchCorrectEffect.supportedKeys,
+      { PitchCorrectEffect(input: $0) }
+    ),
+    (VocoderEffect.type, VocoderEffect.supportedKeys, { VocoderEffect(input: $0) }),
+    (TalkboxEffect.type, TalkboxEffect.supportedKeys, { TalkboxEffect(input: $0) }),
+    (
+      FormantFilterEffect.type, FormantFilterEffect.supportedKeys,
+      { FormantFilterEffect(input: $0) }
+    ),
   ]
 
   private static let byType = Dictionary(

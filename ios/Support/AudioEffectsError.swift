@@ -24,6 +24,9 @@ enum AudioEffectsError: LocalizedError {
   case midiFailed(String, OSStatus)
   case midiDeviceNotFound(String)
   case midiNotEnabled
+  /// The engine has no input, or the user has not granted the microphone.
+  case microphoneUnavailable
+  case microphoneDenied
 
   var code: String {
     switch self {
@@ -41,6 +44,8 @@ enum AudioEffectsError: LocalizedError {
     case .midiFailed: return "MIDI_FAILED"
     case .midiDeviceNotFound: return "MIDI_DEVICE_NOT_FOUND"
     case .midiNotEnabled: return "MIDI_NOT_ENABLED"
+    case .microphoneUnavailable: return "MICROPHONE_UNAVAILABLE"
+    case .microphoneDenied: return "MICROPHONE_DENIED"
     }
   }
 
@@ -81,6 +86,13 @@ enum AudioEffectsError: LocalizedError {
         + "unpaired if it was Bluetooth."
     case .midiNotEnabled:
       return "MIDI is not enabled. Call setMidiEnabled(true) first."
+    case .microphoneUnavailable:
+      return
+        "No audio input is available. Configure the engine with "
+        + "category 'playAndRecord' before opening the microphone."
+    case .microphoneDenied:
+      return
+        "Microphone access was denied. The user can grant it in Settings."
     }
   }
 

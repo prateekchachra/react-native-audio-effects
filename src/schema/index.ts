@@ -39,6 +39,11 @@ export {
   defaultsFor,
   getEffect,
   getParam,
+  CARRIER_VOICES,
+  KEY_NAMES,
+  PITCH_SOURCES,
+  type CarrierVoice,
+  type CarrierPitchSource,
 } from './effects';
 
 export {

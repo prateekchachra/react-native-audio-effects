@@ -26,7 +26,7 @@ export interface SourceInfo {
 
 export class Source {
   readonly id: number;
-  readonly kind: 'file' | 'generator';
+  readonly kind: 'file' | 'generator' | 'microphone';
   readonly info: SourceInfo;
   /** Set for generators. */
   readonly waveform?: Waveform;
@@ -37,7 +37,7 @@ export class Source {
   /** @internal — created by the engine. */
   constructor(
     id: number,
-    kind: 'file' | 'generator',
+    kind: 'file' | 'generator' | 'microphone',
     info: SourceInfo,
     waveform?: Waveform
   ) {

@@ -71,6 +71,9 @@ final class SourceGraph {
   private(set) var player: AudioPlayer?
   /// Generator for oscillator sources; nil for files.
   let generator: GeneratorNode?
+
+  /// The engine's microphone, when this source is a live input.
+  private(set) var input: AudioEngine.InputNode?
   /// Cached copy of an imported file, removed when the source is released.
   let fileURL: URL?
   /// Kept so the player can be re-primed after the graph is rewired.
@@ -172,7 +175,8 @@ final class SourceGraph {
     if let envelope { return envelope }
     if let player { return player as Node }
     if let generator { return generator.node }
-    fatalError("A source must have either a player or a generator")
+    if let input { return input }
+    fatalError("A source must have a player, a generator or an input")
   }
 
   init(
@@ -191,6 +195,33 @@ final class SourceGraph {
     self.file = player.file
     self.head = Fader(player, gain: 1)
     self.meter = Fader(output, gain: 1)
+    rebuild()
+  }
+
+  /**
+   Live microphone.
+
+   The input node belongs to the engine, not to this graph, so it is
+   borrowed rather than owned — several sources could legitimately read
+   the same microphone, and tearing one down must not take the input
+   away from the others.
+
+   It starts silent. A microphone routed to the speaker is a feedback
+   loop, and the one thing worse than a quiet feature is one that
+   screams the moment it is switched on, so unmuting is a deliberate act
+   by the caller once they know headphones are in.
+   */
+  init(id: Int, input: AudioEngine.InputNode, engine: AudioEngine) {
+    self.id = id
+    self.player = nil
+    self.generator = nil
+    self.input = input
+    self.fileURL = nil
+    self.durationSec = 0
+    self.engine = engine
+    self.file = nil
+    self.head = Fader(input, gain: 1)
+    self.meter = Fader(output, gain: 0)
     rebuild()
   }
 

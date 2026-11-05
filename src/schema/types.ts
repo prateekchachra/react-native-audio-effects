@@ -40,11 +40,20 @@ export type ParamUnit =
   | 'oct'
   /** Hundredths of a semitone. Detune and fine tuning. */
   | 'cents'
+  /** Semitones. Transposition, where cents would be unreadably large. */
+  | 'st'
   | 'bit'
   | '';
 
 export type EffectCategory =
-  'dynamics' | 'time' | 'modulation' | 'filter' | 'distortion' | 'utility';
+  | 'dynamics'
+  | 'time'
+  | 'modulation'
+  | 'filter'
+  | 'distortion'
+  | 'utility'
+  /** Pitch and formant work, which is mostly what you want on a voice. */
+  | 'voice';
 
 export type EffectType =
   | 'gain'
@@ -63,7 +72,12 @@ export type EffectType =
   | 'highPassFilter'
   | 'bandPassFilter'
   | 'distortion'
-  | 'bitCrusher';
+  | 'bitCrusher'
+  | 'pitchShift'
+  | 'pitchCorrect'
+  | 'vocoder'
+  | 'talkbox'
+  | 'formantFilter';
 
 export type Waveform =
   | 'sine'

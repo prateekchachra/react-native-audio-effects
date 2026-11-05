@@ -27,6 +27,7 @@ Reanimated, Gesture Handler and SVG.
 - [PresetStore](#presetstore) — saving chains
 - [SampleAgent](#sampleagent) — plain-English sample search
 - [MidiInput](#midiinput) — hardware controllers
+- [Live input](#live-input) — microphone, voice effects
 - [Hooks](#hooks)
 - [Schema](#schema) — the single source of truth
 - [UI kit](#ui-kit)
@@ -364,6 +365,101 @@ touchscreen default of tap-to-release would silence a key still held.
 
 ---
 
+## Live input
+
+Process the microphone in real time. **iOS only**; the Android methods
+reject with `MICROPHONE_UNAVAILABLE` rather than being absent.
+
+```ts
+await engine.configure({ category: 'playAndRecord', bufferFrames: 256 });
+const mic = await engine.createMicrophone();
+
+await mic.addEffect('pitchCorrect');
+if (isUsingHeadphones()) mic.setVolume(1); // it arrives muted
+```
+
+### It arrives muted, and that is not an oversight
+
+A microphone routed to the speaker is a feedback loop. The speaker's
+output reaches the microphone, goes round again a few milliseconds later,
+and within about a second it is a howl at whatever volume the phone can
+manage. Gain, a long reverb tail or a resonant filter make it faster and
+louder.
+
+Nothing inside the audio graph can prevent that, so live sources start at
+volume 0 and unmuting is a separate, deliberate call. `isUsingHeadphones()`
+is the check it is waiting for — true for wired and Bluetooth headphones,
+line out and USB; false for the speaker and receiver.
+
+Re-check it rather than caching: unplugging headphones mid-session is both
+the moment it matters and the moment a cached answer is wrong.
+
+### The simulator cannot do this
+
+`AVAudioSession.setActive(true)` with `.playAndRecord` can block forever in
+the iOS Simulator — not fail, block — which surfaces as a promise that
+never settles. A process sample shows every sample inside that one call.
+
+It is a host problem rather than a library one: the Simulator needs
+macOS microphone permission (System Settings → Privacy & Security →
+Microphone) and a usable input device. Even once it activates, the
+simulator has no real microphone and its timings say nothing useful about
+latency. **Test live input on a device.**
+
+### Latency
+
+Round-trip is the I/O buffer plus the device's own input and output
+offsets, so `bufferFrames` helps but cannot remove it. Expect 20–40 ms on
+a recent iPhone with wired headphones. **Bluetooth adds 150–250 ms**,
+which is far too much to sing against — safe from feedback and still
+unusable for monitoring, which are different questions.
+
+### Voice effects
+
+| Effect          | What it does                                                                                          |
+| --------------- | ----------------------------------------------------------------------------------------------------- |
+| `pitchCorrect`  | Snaps to the nearest note of a key. `amount` is how far, `speed` is how fast. Hard and fast is robot. |
+| `vocoder`       | Your formants over a synth carrier.                                                                   |
+| `talkbox`       | Coarser cousin of the vocoder.                                                                        |
+| `formantFilter` | Vowel-like resonant peaks.                                                                            |
+| `pitchShift`    | Transpose without changing tempo.                                                                     |
+
+**No pitch-detection tap.** `pitchCorrect` detects _and_ corrects inside
+the DSP node. That is why it is used instead of `PitchTap` feeding a
+shifter: taps installed on a live `AVAudioEngine` graph have silenced
+playback twice in this project, and a correction loop would need one on
+every frame.
+
+### The carrier
+
+A vocoder needs two signals — the voice shapes the sound, a carrier
+supplies it — but the effect chain is one-in-one-out. So the carrier
+lives _inside_ the effect, which is also how a hardware vocoder with a
+built-in oscillator works.
+
+`CARRIER_VOICES` are the presets: Robot, Choir, Strings, Bass, Glass,
+Buzz. They differ in waveform, how many oscillators are stacked and how
+far apart — one saw is a robot, five a few cents apart is a choir.
+
+Set `pitchSource` to `1` and the carrier follows MIDI, which is how a
+vocoder is actually played: sing into the microphone, play the notes you
+want it to sing. That needs nothing native — the MIDI layer writes
+`carrierFrequency`, and parameter writes are synchronous over JSI, so a
+key press costs no more than turning a knob.
+
+### Permission
+
+```xml
+<key>NSMicrophoneUsageDescription</key>
+<string>Process your voice through effects in real time.</string>
+```
+
+Without it the app is _terminated_ on first access rather than denied.
+The prompt is raised by `createMicrophone()`, not at configure time, so
+an app that never records never asks.
+
+---
+
 ## Hooks
 
 | Hook                               | Returns                            |
@@ -524,6 +620,8 @@ integer parameter IDs — so parity is reported, not assumed.
 |                            | iOS                        | Android                   |
 | -------------------------- | -------------------------- | ------------------------- |
 | MIDI input                 | ✅ USB, Bluetooth, network | ❌ not yet                |
+| Microphone input           | ✅                         | ❌ not yet                |
+| Voice effects              | ✅                         | ❌ no Soundpipe           |
 | `distortion`, `bitcrusher` | ✅                         | ❌                        |
 | delay `tone`               | ✅                         | ❌ no damping stage       |
 | per-source pan             | ✅ any source              | generators only           |

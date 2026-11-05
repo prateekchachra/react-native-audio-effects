@@ -79,5 +79,9 @@
 	     hardware rather than a missing key. -->
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Connect a Bluetooth MIDI keyboard to play the synth.</string>
+	<!-- Live input. Without this key the app is terminated the moment it
+	     touches the microphone, rather than being denied. -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Process your voice through effects in real time.</string>
 </dict>
 </plist>

@@ -2,6 +2,7 @@ export { AudioEngine, type OscillatorConfig } from './AudioEngine';
 export { Effect } from './Effect';
 export type { EffectLike } from './EffectLike';
 export { LFO } from './LFO';
+export { currentOutputRoute, isUsingHeadphones } from './monitoring';
 export type { LFOOptions, LFOShape, LFOTarget } from './LFO';
 export { PolySynth, VoiceStackEffect } from './PolySynth';
 export type { PlayMode, PolySynthOptions } from './PolySynth';
